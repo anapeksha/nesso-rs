@@ -53,6 +53,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "nesso") | .version')"
           crates=(
             nesso-display
             nesso-audio
@@ -65,12 +66,55 @@ jobs:
             nesso-storage
           )
 
+          publish_crate() {
+            local crate="$1"
+            local attempts=6
+
+            if curl --silent --fail "https://crates.io/api/v1/crates/${crate}/${version}" >/dev/null; then
+              echo "${crate} ${version} is already published; skipping"
+              return 0
+            fi
+
+            for attempt in $(seq 1 "${attempts}"); do
+              echo "Publishing ${crate} ${version}, attempt ${attempt}/${attempts}"
+              if cargo publish -p "${crate}" --token "${CARGO_REGISTRY_TOKEN}"; then
+                sleep 180
+                return 0
+              fi
+
+              echo "Publish failed for ${crate}; waiting before retry"
+              sleep $((attempt * 180))
+            done
+
+            echo "Failed to publish ${crate} ${version}"
+            return 1
+          }
+
           for crate in "${crates[@]}"; do
-            cargo publish -p "${crate}" --token "${CARGO_REGISTRY_TOKEN}"
-            sleep 30
+            publish_crate "${crate}"
           done
 
       - name: Publish public crate
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish -p nesso --token "${CARGO_REGISTRY_TOKEN}"
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "nesso") | .version')"
+
+          if curl --silent --fail "https://crates.io/api/v1/crates/nesso/${version}" >/dev/null; then
+            echo "nesso ${version} is already published; skipping"
+            exit 0
+          fi
+
+          for attempt in $(seq 1 6); do
+            echo "Publishing nesso ${version}, attempt ${attempt}/6"
+            if cargo publish -p nesso --token "${CARGO_REGISTRY_TOKEN}"; then
+              exit 0
+            fi
+            echo "Publish failed for nesso; waiting before retry"
+            sleep $((attempt * 180))
+          done
+
+          echo "Failed to publish nesso ${version}"
+          exit 1
