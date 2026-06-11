@@ -1,0 +1,112 @@
+# Nesso N1 Hardware Notes
+
+Source: Arduino Nesso N1 User Manual, SKU TPX00227, modified 2026-06-09.
+
+## Verified Components
+
+| Area | Verified detail |
+| --- | --- |
+| MCU | ESP32-C6, 32-bit RISC-V single core, up to 160 MHz |
+| Memory | 512 KiB SRAM, 1536 KiB on-chip flash, 16 MiB external flash |
+| External flash | GD25Q128 or W25Q128 |
+| Wi-Fi | 2.4 GHz Wi-Fi 6, ESP32-C6 integrated radio, FPC antenna |
+| Bluetooth | Bluetooth 5.3 LE, ESP32-C6 integrated radio |
+| 802.15.4 | Thread/Zigbee capable ESP32-C6 radio |
+| LoRa | SX1262, 850-960 MHz, IPEX4 antenna |
+| LoRa RF path | FM8625H RF switch, SGM13005L4 LNA |
+| Display | 1.14 inch IPS LCD, ST7789P3, 135 x 240, 18-bit color, SPI |
+| Touch | FT6336U capacitive touch controller, I2C |
+| IMU | BMI270, 3-axis accelerometer and 3-axis gyroscope, I2C |
+| Buttons | KEY1 and KEY2 via I/O expander pins P0 and P1 |
+| LEDs | Green programmable LED, blue power/status LED |
+| Audio | 4 kHz passive buzzer, GPIO controlled |
+| Infrared | GPIO-controlled IR LED transmitter |
+| Battery | 250 mAh LiPo, 3.7 V nominal, 4.2 V maximum |
+| Charger | AW32001ECSR charge controller with power path management |
+| Fuel gauge | BQ27220YZFR, I2C, voltage/current/capacity monitoring |
+| Regulation | JW5712 buck converter for 3.3 V rail, SGM6603 boost for 5 V peripherals |
+| I/O expanders | Two PI4IOE5V6408 I2C expanders |
+
+## Verified Buses and Addresses
+
+The main I2C bus is shared by the Qwiic connector and internal peripherals.
+The datasheet states a maximum I2C speed of 400 kHz and lists these addresses:
+
+| Device | Address |
+| --- | --- |
+| BMI270 IMU | `0x68` or `0x69` |
+| BQ27220 fuel gauge | `0x55` |
+| AW32001A charger | `0x49` |
+| FT6336U touch | `0x38` |
+| PI4IOE5V6408 expander 1 | `0x43` |
+| PI4IOE5V6408 expander 2 | `0x44` |
+
+The display controller, external flash, and LoRa module share an SPI bus. Chip
+select coordination is mandatory.
+
+Arduino ESP32 variant `variants/arduino_nesso_n1/pins_arduino.h` verifies:
+
+| Bus signal | GPIO |
+| --- | --- |
+| I2C SDA | GPIO10 |
+| I2C SCL | GPIO8 |
+| SPI MOSI | GPIO21 |
+| SPI MISO | GPIO22 |
+| SPI SCK | GPIO20 |
+
+The official Arduino_Nesso_N1 support library configures the display SPI write
+clock at 40 MHz.
+
+## Verified GPIOs
+
+| Signal | GPIO or expander pin |
+| --- | --- |
+| LCD CS | GPIO17 |
+| LCD DC / RS | GPIO16 |
+| LCD reset | Expander E1 `0x44`, P1 |
+| LCD backlight | Expander E1 `0x44`, P6 |
+| Touch INT | GPIO3 |
+| IMU INT | GPIO3 |
+| LoRa CS | GPIO23 |
+| LoRa BUSY | GPIO19 |
+| LoRa IRQ/DIO1 | GPIO15 |
+| LoRa reset/enable | Expander E0 `0x43`, P7 |
+| LoRa antenna switch power | Expander E0 `0x43`, P6 |
+| LoRa LNA enable | Expander E0 `0x43`, P5 |
+| Grove IO0 | GPIO5 |
+| Grove IO1 | GPIO4 |
+| Grove power enable | Expander E1 `0x44`, P2 |
+| HAT IO1 | GPIO2 |
+| HAT IO2 | GPIO6 |
+| HAT IO3 | GPIO7 |
+| Buzzer | GPIO11 |
+| IR transmitter | GPIO9 |
+| KEY1 | Expander E0 `0x43`, P0 |
+| KEY2 | Expander E0 `0x43`, P1 |
+| Power-off control | Expander E1 `0x44`, P0 |
+| VIN detect | Expander E1 `0x44`, P5 |
+| Built-in LED | Expander E1 `0x44`, P7 |
+
+## Display Configuration
+
+Official Arduino_Nesso_N1 `NessoDisplay` configures M5GFX `Panel_ST7789` with:
+
+| Field | Value |
+| --- | --- |
+| Controller | ST7789 |
+| Width | 135 |
+| Height | 240 |
+| Offset X | 52 |
+| Offset Y | 40 |
+| Color inversion | enabled |
+| CS | GPIO17 |
+| DC | GPIO16 |
+| Reset | external expander-controlled reset, not panel GPIO |
+| Backlight | expander-controlled |
+
+## Undocumented in Public Datasheet
+
+The public user manual alone does not provide every mapping. The full pinout,
+Arduino ESP32 variant, and official Arduino_Nesso_N1 support library resolve the
+display, touch interrupt, I2C, IMU, and power-management bus mappings listed
+above.

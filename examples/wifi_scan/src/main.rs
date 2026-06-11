@@ -1,0 +1,113 @@
+#![no_std]
+#![no_main]
+
+use core::fmt::Write as _;
+
+use embedded_graphics::{pixelcolor::Rgb565, prelude::RgbColor};
+use embedded_hal::delay::DelayNs;
+use esp_backtrace as _;
+use esp_hal::{clock::CpuClock, delay::Delay, main};
+use heapless::String;
+use nesso_n1::{NessoDisplay, NessoN1Board, WifiResources};
+use nesso_wifi::{AccessPoint, EspRadioWifi, EspRadioWifiError};
+
+esp_bootloader_esp_idf::esp_app_desc!();
+
+#[main]
+fn main() -> ! {
+    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
+    let peripherals = esp_hal::init(config);
+    esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 64 * 1024);
+    esp_alloc::heap_allocator!(size: 36 * 1024);
+    run(peripherals)
+}
+
+fn run(peripherals: esp_hal::peripherals::Peripherals) -> ! {
+    let mut delay = Delay::new();
+    let (mut display, wifi_resources) = match NessoN1Board::new(peripherals).into_display_and_wifi()
+    {
+        Ok(parts) => parts,
+        Err(_) => abort(),
+    };
+
+    if display.clear(Rgb565::BLACK).is_err()
+        || display
+            .print_centered("WiFi Scan", 58, Rgb565::CYAN)
+            .is_err()
+        || display
+            .print_centered("Scanning...", 92, Rgb565::WHITE)
+            .is_err()
+    {
+        abort()
+    }
+
+    if !scan_and_render(&mut display, wifi_resources) {
+        abort()
+    }
+
+    loop {
+        delay.delay_ms(1000);
+    }
+}
+
+fn scan_and_render(display: &mut NessoDisplay, wifi_resources: WifiResources) -> bool {
+    match EspRadioWifi::new().scan_once(
+        wifi_resources.wifi,
+        wifi_resources.timer_group0,
+        wifi_resources.software_interrupt,
+    ) {
+        Ok(aps) => render_scan_results(display, &aps),
+        Err(error) => {
+            let detail = match error {
+                EspRadioWifiError::Init => "new failed",
+                EspRadioWifiError::Scan => "scan failed",
+            };
+            let _ = display.clear(Rgb565::BLACK);
+            let _ = display.print_centered("WiFi Scan", 76, Rgb565::CYAN);
+            let _ = display.print_centered(detail, 112, Rgb565::RED);
+            false
+        }
+    }
+}
+
+fn render_scan_results(display: &mut NessoDisplay, aps: &[AccessPoint]) -> bool {
+    if display.clear(Rgb565::BLACK).is_err()
+        || display
+            .print_centered("WiFi Scan", 40, Rgb565::CYAN)
+            .is_err()
+    {
+        return false;
+    }
+
+    let mut count_line = String::<32>::new();
+    let _ = write!(count_line, "APs: {}", aps.len());
+    if display
+        .print_centered(&count_line, 64, Rgb565::GREEN)
+        .is_err()
+    {
+        return false;
+    }
+
+    for (index, ap) in aps.iter().take(3).enumerate() {
+        let mut ssid_line = String::<32>::new();
+        let mut info_line = String::<32>::new();
+        let _ = write!(ssid_line, "{}", ap.ssid.as_str());
+        let _ = write!(info_line, "{} dBm ch{}", ap.rssi_dbm, ap.channel);
+        let y = 96 + (index as i32 * 42);
+        if display
+            .print_centered(&ssid_line, y, Rgb565::WHITE)
+            .is_err()
+            || display
+                .print_centered(&info_line, y + 16, Rgb565::YELLOW)
+                .is_err()
+        {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn abort() -> ! {
+    esp_hal::system::software_reset()
+}

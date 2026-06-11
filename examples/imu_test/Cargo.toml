@@ -1,0 +1,26 @@
+[package]
+name = "imu_test"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+embedded-graphics.workspace = true
+embedded-hal.workspace = true
+esp-backtrace.workspace = true
+esp-bootloader-esp-idf.workspace = true
+esp-hal.workspace = true
+esp-println.workspace = true
+heapless.workspace = true
+nesso-imu = { path = "../../crates/nesso-imu" }
+nesso-n1 = { path = "../../crates/nesso-n1" }
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "imu_test"
+path = "src/main.rs"
+test = false
+bench = false

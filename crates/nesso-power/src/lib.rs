@@ -1,0 +1,109 @@
+#![no_std]
+
+use embedded_hal::i2c::I2c;
+
+pub const BQ27220_ADDRESS: u8 = 0x55;
+pub const AW32001_ADDRESS: u8 = 0x49;
+pub const BQ27220_VOLTAGE: u8 = 0x08;
+pub const BQ27220_CURRENT: u8 = 0x0c;
+pub const BQ27220_REMAIN_CAPACITY: u8 = 0x10;
+pub const BQ27220_FULL_CAPACITY: u8 = 0x12;
+pub const AW32001_SYS_STATUS: u8 = 0x08;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ChargeStatus {
+    Unknown,
+    Discharging,
+    Charging,
+    Full,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PowerState {
+    Usb,
+    Battery,
+    Sleep,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BatteryStatus {
+    pub voltage_mv: u16,
+    pub current_ma: i16,
+    pub percentage: u8,
+    pub charge: ChargeStatus,
+}
+
+pub struct Power<I2C> {
+    i2c: I2C,
+    fuel_gauge_address: u8,
+    charger_address: u8,
+}
+
+impl<I2C> Power<I2C> {
+    #[must_use]
+    pub const fn new(i2c: I2C) -> Self {
+        Self {
+            i2c,
+            fuel_gauge_address: BQ27220_ADDRESS,
+            charger_address: AW32001_ADDRESS,
+        }
+    }
+
+    pub fn release(self) -> I2C {
+        self.i2c
+    }
+}
+
+impl<I2C, E> Power<I2C>
+where
+    I2C: I2c<Error = E>,
+{
+    pub fn battery_status(&mut self) -> Result<BatteryStatus, E> {
+        let voltage_mv = self.read_control_word(0x08)?;
+        let current_ma = self.read_control_word(BQ27220_CURRENT)? as i16;
+        let percentage = self.battery_percentage()?;
+        Ok(BatteryStatus {
+            voltage_mv,
+            current_ma,
+            percentage,
+            charge: self.charge_status()?,
+        })
+    }
+
+    pub fn battery_voltage_mv(&mut self) -> Result<u16, E> {
+        self.read_control_word(BQ27220_VOLTAGE)
+    }
+
+    pub fn battery_percentage(&mut self) -> Result<u8, E> {
+        let remaining = u32::from(self.read_control_word(BQ27220_REMAIN_CAPACITY)?);
+        let full = u32::from(self.read_control_word(BQ27220_FULL_CAPACITY)?);
+        if full == 0 {
+            return Ok(0);
+        }
+        Ok(((remaining * 100) / full).min(100) as u8)
+    }
+
+    pub fn charge_status(&mut self) -> Result<ChargeStatus, E> {
+        let status = self.read_charger_register(AW32001_SYS_STATUS)?;
+        Ok(match (status >> 3) & 0b11 {
+            1 => ChargeStatus::Discharging,
+            2 => ChargeStatus::Charging,
+            3 => ChargeStatus::Full,
+            _ => ChargeStatus::Unknown,
+        })
+    }
+
+    fn read_control_word(&mut self, command: u8) -> Result<u16, E> {
+        let mut data = [0u8; 2];
+        self.i2c
+            .write_read(self.fuel_gauge_address, &[command], &mut data)?;
+        Ok(u16::from_le_bytes(data))
+    }
+
+    fn read_charger_register(&mut self, command: u8) -> Result<u8, E> {
+        let mut data = [0u8; 1];
+        self.i2c
+            .write_read(self.charger_address, &[command], &mut data)?;
+        Ok(data[0])
+    }
+}

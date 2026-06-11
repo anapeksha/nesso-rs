@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  validate:
+    name: Validate workspace
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rust-src
+          targets: riscv32imac-unknown-none-elf
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Metadata
+        run: cargo metadata --no-deps --format-version 1
+
+      - name: Format
+        run: cargo fmt --check --all
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Check
+        run: cargo check --workspace
+
+      - name: Build
+        run: cargo build --workspace
+
+      - name: Host tests
+        run: cargo test -p nesso-input -p nesso-storage --target x86_64-unknown-linux-gnu
+
+      - name: Release build
+        run: cargo build --workspace --release
+
+      - name: Docs
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps
+
+      - name: Publish dry-run for leaf crates
+        shell: bash
+        run: |
+          set -euo pipefail
+          crates=(
+            nesso-display
+            nesso-touch
+            nesso-input
+            nesso-imu
+            nesso-audio
+            nesso-power
+            nesso-wifi
+            nesso-storage
+          )
+
+          for crate in "${crates[@]}"; do
+            cargo publish -p "${crate}" --dry-run --allow-dirty
+          done

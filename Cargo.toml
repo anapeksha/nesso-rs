@@ -1,0 +1,82 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/nesso-n1",
+    "crates/nesso-display",
+    "crates/nesso-touch",
+    "crates/nesso-input",
+    "crates/nesso-imu",
+    "crates/nesso-audio",
+    "crates/nesso-power",
+    "crates/nesso-wifi",
+    "crates/nesso-storage",
+    "crates/nesso",
+    "examples/hello_world",
+    "examples/display_test",
+    "examples/touch_test",
+    "examples/imu_test",
+    "examples/wifi_scan",
+    "examples/board_info",
+    "examples/audio_test",
+    "examples/battery_test",
+]
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+rust-version = "1.88"
+version = "0.0.1"
+authors = ["Nesso RS Contributors"]
+repository = "https://github.com/anapeksha/nesso-rs"
+homepage = "https://github.com/anapeksha/nesso-rs"
+documentation = "https://docs.rs/nesso"
+readme = "README.md"
+keywords = ["esp32c6", "embedded", "nesso", "arduino", "no-std"]
+categories = ["embedded", "hardware-support", "no-std"]
+
+[workspace.dependencies]
+bmi2 = { version = "0.1.2", default-features = false }
+embedded-graphics = { version = "0.8.1", default-features = false }
+embassy-futures = { version = "0.1.2", default-features = false }
+embedded-hal = { version = "1.0.0", default-features = false }
+embedded-hal-async = { version = "1.0.0", default-features = false }
+esp-alloc = { version = "0.10.0", default-features = true, features = [
+    "esp32c6",
+] }
+esp-backtrace = { version = "0.19.0", default-features = false, features = [
+    "esp32c6",
+    "panic-handler",
+    "println",
+] }
+esp-bootloader-esp-idf = { version = "0.5.0", default-features = false, features = [
+    "esp32c6",
+] }
+esp-hal = { version = "~1.1.1", default-features = false, features = [
+    "esp32c6",
+    "rt",
+    "unstable",
+] }
+esp-println = { version = "0.17.0", default-features = false, features = [
+    "esp32c6",
+    "no-op",
+] }
+esp-radio = { version = "0.18.0", default-features = false, features = [
+    "esp-alloc",
+    "esp32c6",
+    "unstable",
+    "wifi",
+] }
+esp-rtos = { version = "0.3.0", default-features = false, features = [
+    "esp-alloc",
+    "esp-radio",
+    "esp32c6",
+] }
+heapless = { version = "0.8.0", default-features = false }
+nb = "1.1.0"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+large_stack_frames = "deny"
+mem_forget = "deny"
