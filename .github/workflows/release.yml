@@ -59,6 +59,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "nesso") | .version')"
           crates=(
             nesso-display
             nesso-audio
