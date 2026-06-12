@@ -11,7 +11,9 @@ jobs:
   publish:
     name: Publish crates
     runs-on: ubuntu-latest
-    environment: crates.io
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
       - name: Checkout
@@ -47,9 +49,13 @@ jobs:
           cargo build --workspace --release
           cargo doc --workspace --no-deps
 
+      - name: Authenticate with crates.io
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+
       - name: Publish internal crates
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -65,12 +71,39 @@ jobs:
             nesso-storage
           )
 
+          crate_version() {
+            cargo metadata --no-deps --format-version 1 \
+              | jq -r --arg crate "$1" '.packages[] | select(.name == $crate) | .version'
+          }
+
+          crate_published() {
+            local crate="$1"
+            local version="$2"
+            curl --silent --fail "https://crates.io/api/v1/crates/${crate}/${version}" >/dev/null
+          }
+
           for crate in "${crates[@]}"; do
-            cargo publish -p "${crate}" --token "${CARGO_REGISTRY_TOKEN}"
-            sleep 30
+            version="$(crate_version "${crate}")"
+            if crate_published "${crate}" "${version}"; then
+              echo "Skipping ${crate} ${version}; already published"
+              continue
+            fi
+
+            echo "Publishing ${crate} ${version}"
+            cargo publish -p "${crate}"
           done
 
       - name: Publish public crate
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish -p nesso --token "${CARGO_REGISTRY_TOKEN}"
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "nesso") | .version')"
+          if curl --silent --fail "https://crates.io/api/v1/crates/nesso/${version}" >/dev/null; then
+            echo "Skipping nesso ${version}; already published"
+            exit 0
+          fi
+
+          echo "Publishing nesso ${version}"
+          cargo publish -p nesso
