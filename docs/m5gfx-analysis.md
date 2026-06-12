@@ -31,7 +31,7 @@ DMA queue operations.
 
 For Nesso N1 the useful lesson is not dynamic bus polymorphism; the board has
 one known ST7789 display. The useful lesson is explicit bus configuration and
-treating DMA as a bus property. `nesso-display` now exposes `BusConfig` with
+treating DMA as a bus property. `nesso::display` now exposes `BusConfig` with
 write frequency and DMA intent.
 
 ## Panel Abstraction
@@ -44,7 +44,7 @@ address-window logic and optional touch/light attachment.
 For Nesso N1 this directly maps to verified ST7789 settings from the official
 Arduino_Nesso_N1 library: 135 x 240, offset X 52, offset Y 40, invert enabled,
 CS GPIO17, DC GPIO16, reset via expander, backlight via expander.
-`nesso-display` now has a `PanelConfig` instead of only width and height.
+`nesso::display` now has a `PanelConfig` instead of only width and height.
 
 ## Touch Abstraction
 
@@ -53,9 +53,9 @@ point reads, sleep/wake, and coordinate calibration through panel conversion.
 Nesso N1 uses FT6336U, which is FT6x36-family compatible for the basic status
 and point registers used by the SDK.
 
-`nesso-touch` remains a separate crate because Rust ownership is clearer when
-the I2C device is not hidden behind the display object. The verified interrupt
-line is now documented in the BSP as GPIO3.
+`nesso::touch` remains independent from display ownership because Rust ownership
+is clearer when the I2C device is not hidden behind the display object. The
+verified interrupt line is now documented in the BSP as GPIO3.
 
 ## DMA and Sprites
 
@@ -70,9 +70,9 @@ without changing the basic display ownership model.
 
 ## Applied Improvements
 
-- `nesso-display`: added bus/panel config separation, reset ownership, panel
+- `nesso::display`: added bus/panel config separation, reset ownership, panel
   offsets, inversion, and verified Nesso display defaults in examples.
-- `nesso-touch`: kept independent I2C ownership; BSP now documents touch INT.
+- `nesso::touch`: kept independent I2C ownership; BSP now documents touch INT.
 - `nesso`: no structural change required beyond relying on the improved
   display/touch types. The existing parts-bundle constructor is consistent with
   Rust ownership and avoids hidden global device state.

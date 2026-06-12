@@ -1,31 +1,24 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/nesso-n1",
-    "crates/nesso-display",
-    "crates/nesso-touch",
-    "crates/nesso-input",
-    "crates/nesso-imu",
-    "crates/nesso-audio",
-    "crates/nesso-power",
-    "crates/nesso-wifi",
-    "crates/nesso-storage",
     "crates/nesso",
     "examples/hello_world",
     "examples/display_test",
     "examples/touch_test",
+    "examples/input_test",
     "examples/imu_test",
+    "examples/env_pro_test",
     "examples/wifi_scan",
     "examples/board_info",
     "examples/audio_test",
     "examples/battery_test",
+    "examples/storage_test",
 ]
 
 [workspace.package]
 edition = "2024"
 license = "MIT"
 rust-version = "1.88"
-version = "0.0.1"
 authors = ["Nesso RS Contributors"]
 repository = "https://github.com/anapeksha/nesso-rs"
 homepage = "https://github.com/anapeksha/nesso-rs"

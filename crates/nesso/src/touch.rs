@@ -1,5 +1,3 @@
-#![no_std]
-
 use embedded_hal::i2c::I2c;
 use heapless::Vec;
 
@@ -18,12 +16,14 @@ pub struct TouchState {
 }
 
 impl TouchState {
+    /// Returns true when at least one touch point is active.
     #[must_use]
     pub fn is_pressed(&self) -> bool {
         !self.points.is_empty()
     }
 
     #[must_use]
+    /// Returns the first active touch point.
     pub fn primary(&self) -> Option<TouchPoint> {
         self.points.first().copied()
     }
@@ -44,6 +44,7 @@ pub struct Touch<I2C> {
 }
 
 impl<I2C> Touch<I2C> {
+    /// Creates an FT6336U touch driver on the default Nesso N1 I2C address.
     #[must_use]
     pub const fn new(i2c: I2C) -> Self {
         Self {
@@ -53,6 +54,7 @@ impl<I2C> Touch<I2C> {
         }
     }
 
+    /// Releases the wrapped I2C bus.
     pub fn release(self) -> I2C {
         self.i2c
     }
@@ -62,6 +64,7 @@ impl<I2C, E> Touch<I2C>
 where
     I2C: I2c<Error = E>,
 {
+    /// Reads the current touch points from the controller.
     pub fn read_state(&mut self) -> Result<TouchState, E> {
         let mut count = [0u8; 1];
         self.i2c.write_read(self.address, &[0x02], &mut count)?;
@@ -77,6 +80,7 @@ where
         Ok(state)
     }
 
+    /// Polls the controller and returns the state transition since the last poll.
     pub fn poll_event(&mut self) -> Result<TouchEvent, E> {
         let current = self.read_state()?;
         let event = match (self.previous.primary(), current.primary()) {

@@ -1,5 +1,5 @@
 [package]
-name = "audio_test"
+name = "storage_test"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -7,16 +7,19 @@ version = "0.0.0"
 
 [dependencies]
 nesso = { path = "../../crates/nesso" }
+embedded-graphics.workspace = true
+embedded-hal.workspace = true
 esp-backtrace.workspace = true
 esp-bootloader-esp-idf.workspace = true
 esp-hal.workspace = true
 esp-println.workspace = true
+heapless.workspace = true
 
 [lints]
 workspace = true
 
 [[bin]]
-name = "audio_test"
+name = "storage_test"
 path = "src/main.rs"
 test = false
 bench = false

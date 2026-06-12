@@ -38,13 +38,12 @@ the request was refactoring and verification, not new functionality.
 
 ## IMU
 
-Implemented: BMI270 chip-id read, acceleration, gyroscope, and orientation data
-types.
+Implemented: BMI270 config upload through the `bmi2` crate, explicit
+facade-level initialization through `Nesso::init_imu`, raw accelerometer reads,
+raw gyroscope reads, chip-id read helper, and orientation data types.
 
-Remaining gap: Bosch BMI270 feature configuration upload is not encoded. The
-official Arduino library delegates this to Arduino_BMI270_BMM150 and configures
-accelerometer plus gyroscope at 25 Hz. Porting that vendor configuration blob
-would be new functionality rather than a refactor.
+Remaining gap: interrupt-driven motion events are not implemented. The shared
+interrupt line is documented, but this pass keeps IMU reads polling-based.
 
 ## Power
 
@@ -56,19 +55,22 @@ methods remain out of scope for this refactor.
 
 ## Storage
 
-Implemented: fixed-size key/value settings store suitable for flash page
-serialization by an esp-storage adapter.
+Implemented: fixed-size key/value settings store and an optional
+`esp-storage`-backed flash adapter.
 
 Gap: Partition-table offsets are application-specific and not specified by the
-Nesso datasheet.
+Nesso datasheet. The SDK therefore requires applications to provide an explicit
+flash offset instead of hard-coding one.
 
 ## Wi-Fi
 
-Implemented: async station trait covering scan, connect, disconnect, and state.
+Implemented: typed ESP32-C6 radio resources, `esp-radio` scan/connect/disconnect
+support, facade-owned Wi-Fi state, and async station APIs with blocking
+convenience wrappers for simple examples.
 
-Remaining gap: concrete esp-wifi adapter needs application-owned Embassy
-executor, timers, RNG, and network stack wiring. This is not a GPIO discovery
-gap.
+Remaining gap: full TCP/IP socket lifecycle is not wrapped by the SDK yet.
+Applications that need non-blocking Wi-Fi should run an Embassy executor and
+use the async station methods exposed by `nesso::wifi`.
 
 ## Audio
 
@@ -77,9 +79,29 @@ Implemented: passive buzzer tones through a generic output abstraction.
 Remaining gap: the investigated sources list only a passive buzzer for audio.
 No source lists a microphone, so microphone support remains intentionally absent.
 
+## Environmental Units
+
+Implemented: `nesso::env` supports M5Stack Unit ENV Pro U169 raw BME688
+measurements over I2C address `0x77`: temperature, humidity, pressure, and gas
+resistance.
+
+Remaining gap: IAQ, VOC, and eCO2 estimates are not implemented because they are
+not direct BME688 register outputs. The SDK exposes raw sensor values instead of
+inventing derived air-quality values.
+
 ## BSP
 
 Implemented: verified component list, addresses, geometry, display offsets, bus
-pins, native GPIOs, and expander GPIOs.
+pins, native GPIOs, expander GPIOs, and concrete facade-ready board parts.
 
 Remaining gap: no requested BSP mapping gap remains.
+
+## Facade
+
+Implemented: `nesso::Nesso::new(peripherals)` initializes board-owned display,
+I2C, LCD expander reset/backlight, passive buzzer, Wi-Fi radio resources, and
+optional flash settings ownership. BMI270 configuration is explicit through
+`Nesso::init_imu`.
+
+Remaining gap: I2C-backed subsystems are exposed through facade methods rather
+than public fields because they share one physical I2C bus.

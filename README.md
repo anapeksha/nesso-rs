@@ -2,67 +2,99 @@
 
 `nesso-rs` is a Rust-native SDK for the Arduino Nesso N1, an ESP32-C6 based
 device with display, touch, IMU, Wi-Fi, audio, and battery/power-management
-hardware.
+hardware and optional external unit support for Nesso-compatible expansion
+sensors such as M5Stack Unit ENV Pro.
 
 The public crate is [`nesso`](https://crates.io/crates/nesso). The repository is
-a Cargo workspace so lower-level hardware crates can also be used directly when
-an application needs finer control.
+a Cargo workspace for examples and validation, but only the `nesso` crate is
+published to crates.io.
 
 ## Status
 
 This project is an early hardware-validated SDK foundation.
 
-Version `0.0.1` targets only the Arduino Nesso N1. It intentionally does not
-provide a generic board abstraction layer, an M5Stack compatibility layer, or
-support for other ESP32-C6 boards.
+This SDK targets only the Arduino Nesso N1. It intentionally does not provide a
+generic board abstraction layer, an M5Stack compatibility layer, or support for
+other ESP32-C6 boards.
 
 Validated examples currently cover:
 
 - ST7789P3 display initialization and text rendering
 - FT6336U touch reads
 - BMI270 IMU live axis reads
+- KEY1/KEY2 button events
 - Passive buzzer tone output
 - BQ27220/AW32001 battery and charger status reads
+- Heapless settings storage
 - ESP32-C6 Wi-Fi scan using `esp-radio`
+- M5Stack Unit ENV Pro BME688 environmental reads over I2C/Qwiic
 - Board information display
 
 ## Installation
 
 Add the public facade crate:
 
-```toml
-[dependencies]
-nesso = "0.0.1"
+```bash
+cargo add nesso
 ```
 
-Advanced users may depend on subsystem crates directly:
+Enable Wi-Fi only for applications that use the ESP32-C6 radio:
 
 ```toml
 [dependencies]
-nesso-display = "0.0.1"
-nesso-imu = "0.0.1"
-nesso-wifi = "0.0.1"
+nesso = { path = "crates/nesso", features = ["wifi"] }
+esp-alloc = "0.10"
 ```
 
-## Workspace Crates
+Enable ENV Pro support only for applications that use the external unit:
 
-- `nesso`: public facade crate and re-exports for the SDK.
-- `nesso-n1`: Nesso N1 board constants, GPIOs, I2C addresses, and
+```toml
+[dependencies]
+nesso = { path = "crates/nesso", features = ["env"] }
+```
+
+## Public Modules
+
+- `nesso::Nesso`: public facade and shared board ownership.
+- `nesso::bsp`: Nesso N1 board constants, GPIOs, I2C addresses, and
   board-specific setup helpers.
-- `nesso-display`: ST7789P3 display driver with `embedded-graphics`
+- `nesso::display`: ST7789P3 display driver with `embedded-graphics`
   integration.
-- `nesso-touch`: FT6336U touch controller support.
-- `nesso-input`: button event state machine helpers.
-- `nesso-imu`: BMI270 initialization, config upload, and sensor reads.
-- `nesso-audio`: passive buzzer output and blocking tone generation.
-- `nesso-power`: BQ27220 fuel gauge and AW32001 charger status support.
-- `nesso-wifi`: ESP32-C6 Wi-Fi scan support using `esp-radio` and `esp-rtos`.
-- `nesso-storage`: heapless settings storage primitives.
+- `nesso::env`: external environmental unit support, gated behind the `env`
+  feature.
+- `nesso::touch`: FT6336U touch controller support.
+- `nesso::input`: button event state machine helpers.
+- `nesso::imu`: BMI270 initialization, config upload, and sensor reads.
+- `nesso::audio`: passive buzzer output and blocking tone generation.
+- `nesso::power`: BQ27220 fuel gauge and AW32001 charger status support.
+- `nesso::wifi`: ESP32-C6 Wi-Fi scan support, gated behind the `wifi` feature.
+- `nesso::storage`: heapless settings storage primitives and
+  `esp-storage` flash-backed persistence.
+- `nesso::sprite`: caller-owned RGB565 sprite/framebuffer support for
+  flicker-free dirty-region rendering.
+
+## Examples
+
+Each public module has one focused hardware or module-validation example:
+
+| Module | Example |
+| --- | --- |
+| `nesso::Nesso` | `hello_world` |
+| `nesso::bsp` | `board_info` |
+| `nesso::display` | `display_test` |
+| `nesso::touch` | `touch_test` |
+| `nesso::input` | `input_test` |
+| `nesso::imu` | `imu_test` |
+| `nesso::audio` | `audio_test` |
+| `nesso::power` | `battery_test` |
+| `nesso::wifi` | `wifi_scan` |
+| `nesso::storage` | `storage_test` |
+| `nesso::env` | `env_pro_test` |
 
 ## Example
 
-The BSP owns the fixed Nesso N1 wiring. Applications initialize the ESP-HAL
-peripherals once, then ask the BSP for ready-to-use board resources.
+The facade owns the fixed Nesso N1 wiring. Applications initialize ESP-HAL once,
+then hand the peripherals to `Nesso::new`.
 
 ```rust,ignore
 #![no_std]
@@ -71,19 +103,26 @@ peripherals once, then ask the BSP for ready-to-use board resources.
 use embedded_graphics::{pixelcolor::Rgb565, prelude::RgbColor};
 use embedded_hal::delay::DelayNs;
 use esp_hal::{clock::CpuClock, delay::Delay, main};
-use nesso::bsp::NessoN1Board;
+use nesso::Nesso;
 
 #[main]
 fn main() -> ! {
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
     let mut delay = Delay::new();
-    let mut display = NessoN1Board::new(peripherals).into_display().unwrap();
+    let mut nesso = match Nesso::new(peripherals) {
+        Ok(nesso) => nesso,
+        Err(_) => esp_hal::system::software_reset(),
+    };
 
-    display.clear(Rgb565::BLACK).unwrap();
-    display
-        .print_centered("Hello from nesso-rs", 120, Rgb565::WHITE)
-        .unwrap();
+    if nesso.display.clear(Rgb565::BLACK).is_err()
+        || nesso
+            .display
+            .print_centered("Hello from nesso-rs", 120, Rgb565::WHITE)
+            .is_err()
+    {
+        esp_hal::system::software_reset()
+    }
 
     loop {
         delay.delay_ms(1000);
@@ -92,6 +131,10 @@ fn main() -> ! {
 ```
 
 See `examples/` for hardware-focused examples.
+
+Wi-Fi is behind the optional `wifi` feature and is initialized lazily with
+`nesso.init_wifi()`. Only applications that enable Wi-Fi need to compile
+`esp-radio`/`esp-rtos` and provide an `esp_alloc` heap for the ESP radio stack.
 
 ## Build
 
@@ -132,15 +175,15 @@ Hardware and architecture notes are kept in `docs/`:
 
 Releases are published from GitHub Releases.
 
-1. Update the workspace version in `Cargo.toml`.
-2. Merge through a pull request to `main`.
-3. Create and push a tag matching the version, for example `v0.0.1`.
-4. Publish a GitHub Release for that tag.
+1. Merge through a pull request to `main`.
+2. Create and push the release tag.
+3. Publish a GitHub Release for that tag.
 
-The release workflow validates the workspace, publishes internal crates first,
-then publishes the public `nesso` crate to crates.io.
+The release workflow validates the workspace and publishes only the public
+`nesso` crate to crates.io.
 
-The workflow requires a repository secret named `CARGO_REGISTRY_TOKEN`.
+The workflow uses crates.io trusted publishing and does not require a long-lived
+Cargo registry token.
 
 ## License
 

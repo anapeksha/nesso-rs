@@ -8,8 +8,11 @@ use embedded_hal::delay::DelayNs;
 use esp_backtrace as _;
 use esp_hal::{clock::CpuClock, delay::Delay, main};
 use heapless::String;
-use nesso_n1::{NessoDisplay, NessoN1Board, WifiResources};
-use nesso_wifi::{AccessPoint, EspRadioWifi, EspRadioWifiError};
+use nesso::{
+    Nesso,
+    bsp::NessoDisplay,
+    wifi::{AccessPoint, EspRadioWifiError},
+};
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
@@ -24,24 +27,25 @@ fn main() -> ! {
 
 fn run(peripherals: esp_hal::peripherals::Peripherals) -> ! {
     let mut delay = Delay::new();
-    let (mut display, wifi_resources) = match NessoN1Board::new(peripherals).into_display_and_wifi()
-    {
-        Ok(parts) => parts,
+    let mut nesso = match Nesso::new(peripherals) {
+        Ok(nesso) => nesso,
         Err(_) => abort(),
     };
 
-    if display.clear(Rgb565::BLACK).is_err()
-        || display
+    if nesso.display.clear(Rgb565::BLACK).is_err()
+        || nesso
+            .display
             .print_centered("WiFi Scan", 58, Rgb565::CYAN)
             .is_err()
-        || display
+        || nesso
+            .display
             .print_centered("Scanning...", 92, Rgb565::WHITE)
             .is_err()
     {
         abort()
     }
 
-    if !scan_and_render(&mut display, wifi_resources) {
+    if !scan_and_render(&mut nesso) {
         abort()
     }
 
@@ -50,21 +54,27 @@ fn run(peripherals: esp_hal::peripherals::Peripherals) -> ! {
     }
 }
 
-fn scan_and_render(display: &mut NessoDisplay, wifi_resources: WifiResources) -> bool {
-    match EspRadioWifi::new().scan_once(
-        wifi_resources.wifi,
-        wifi_resources.timer_group0,
-        wifi_resources.software_interrupt,
-    ) {
-        Ok(aps) => render_scan_results(display, &aps),
+fn scan_and_render(nesso: &mut Nesso) -> bool {
+    let mut wifi = match nesso.init_wifi() {
+        Ok(wifi) => wifi,
+        Err(_) => return false,
+    };
+
+    match wifi.scan() {
+        Ok(aps) => render_scan_results(&mut nesso.display, &aps),
         Err(error) => {
             let detail = match error {
                 EspRadioWifiError::Init => "new failed",
+                EspRadioWifiError::ResourcesUnavailable => "resources used",
+                EspRadioWifiError::NotStarted => "not started",
+                EspRadioWifiError::Configure => "config failed",
                 EspRadioWifiError::Scan => "scan failed",
+                EspRadioWifiError::Connect => "connect failed",
+                EspRadioWifiError::Disconnect => "disconnect failed",
             };
-            let _ = display.clear(Rgb565::BLACK);
-            let _ = display.print_centered("WiFi Scan", 76, Rgb565::CYAN);
-            let _ = display.print_centered(detail, 112, Rgb565::RED);
+            let _ = nesso.display.clear(Rgb565::BLACK);
+            let _ = nesso.display.print_centered("WiFi Scan", 76, Rgb565::CYAN);
+            let _ = nesso.display.print_centered(detail, 112, Rgb565::RED);
             false
         }
     }

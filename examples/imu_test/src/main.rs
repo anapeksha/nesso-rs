@@ -3,13 +3,16 @@
 
 use core::fmt::Write as _;
 
-use embedded_graphics::{pixelcolor::Rgb565, prelude::RgbColor};
+use embedded_graphics::{
+    pixelcolor::Rgb565,
+    prelude::{Point, RgbColor, Size},
+    primitives::Rectangle,
+};
 use embedded_hal::delay::DelayNs;
 use esp_backtrace as _;
 use esp_hal::{clock::CpuClock, delay::Delay, main};
 use heapless::String;
-use nesso_imu::Bmi270;
-use nesso_n1::{NessoDisplay, NessoN1Board};
+use nesso::{Nesso, bsp::NessoDisplay};
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
@@ -22,37 +25,62 @@ fn main() -> ! {
 
 fn run(peripherals: esp_hal::peripherals::Peripherals) -> ! {
     let mut delay = Delay::new();
-    let (mut display, i2c) = match NessoN1Board::new(peripherals).into_display_and_i2c() {
-        Ok(parts) => parts,
+    let mut nesso = match Nesso::new(peripherals) {
+        Ok(nesso) => nesso,
         Err(_) => abort(),
     };
 
-    if display.clear(Rgb565::BLACK).is_err() {
+    if nesso.display.clear(Rgb565::BLACK).is_err() {
         abort()
     }
 
-    show_imu_status(&mut display, "BMI270", "Uploading config", Rgb565::YELLOW);
-
-    let mut bmi = Bmi270::new(i2c, Delay::new());
-
-    if bmi.init().is_err() {
-        show_imu_status(&mut display, "BMI270 config", "Init failed", Rgb565::RED);
+    show_imu_status(
+        &mut nesso.display,
+        "BMI270",
+        "Uploading config",
+        Rgb565::YELLOW,
+    );
+    if nesso.init_imu().is_err() {
+        show_imu_status(
+            &mut nesso.display,
+            "BMI270 config",
+            "Init failed",
+            Rgb565::RED,
+        );
         abort()
     }
+    show_imu_status(&mut nesso.display, "BMI270", "Configured", Rgb565::GREEN);
 
     delay.delay_ms(100);
+    if nesso.display.clear(Rgb565::BLACK).is_err()
+        || nesso
+            .display
+            .print_centered("IMU Tilt Test", 42, Rgb565::CYAN)
+            .is_err()
+        || nesso
+            .display
+            .print_centered("BMI270 live", 64, Rgb565::GREEN)
+            .is_err()
+    {
+        abort()
+    }
 
     loop {
-        let data = match bmi.data() {
-            Ok(data) => data,
+        let acceleration = match nesso.acceleration() {
+            Ok(acceleration) => acceleration,
             Err(_) => {
-                show_imu_status(&mut display, "BMI270", "Read error", Rgb565::RED);
+                show_imu_status(&mut nesso.display, "BMI270", "Read error", Rgb565::RED);
                 delay.delay_ms(500);
                 continue;
             }
         };
 
-        if !render_imu_data(&mut display, data.acc.x, data.acc.y, data.acc.z) {
+        if !render_imu_data(
+            &mut nesso.display,
+            acceleration.x_mg,
+            acceleration.y_mg,
+            acceleration.z_mg,
+        ) {
             abort()
         }
 
@@ -61,13 +89,12 @@ fn run(peripherals: esp_hal::peripherals::Peripherals) -> ! {
 }
 
 fn render_imu_data(display: &mut NessoDisplay, x: i16, y: i16, z: i16) -> bool {
-    if display.clear(Rgb565::BLACK).is_err()
-        || display
-            .print_centered("IMU Tilt Test", 42, Rgb565::CYAN)
-            .is_err()
-        || display
-            .print_centered("BMI270 live", 64, Rgb565::GREEN)
-            .is_err()
+    if display
+        .clear_region(
+            &Rectangle::new(Point::new(0, 88), Size::new(135, 110)),
+            Rgb565::BLACK,
+        )
+        .is_err()
     {
         return false;
     }

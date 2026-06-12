@@ -10,14 +10,13 @@ checksum = "c583acf993cf4245c4acb0a2cc2ab1f9cc097de73411bb6d3647ff6af2b1013d"
 
 [[package]]
 name = "audio_test"
-version = "0.0.1"
+version = "0.0.0"
 dependencies = [
  "esp-backtrace",
  "esp-bootloader-esp-idf",
  "esp-hal",
  "esp-println",
- "nesso-audio",
- "nesso-n1",
+ "nesso",
 ]
 
 [[package]]
@@ -40,7 +39,7 @@ checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
 name = "battery_test"
-version = "0.0.1"
+version = "0.0.0"
 dependencies = [
  "embedded-graphics",
  "embedded-hal 1.0.0",
@@ -49,8 +48,7 @@ dependencies = [
  "esp-hal",
  "esp-println",
  "heapless 0.8.0",
- "nesso-n1",
- "nesso-power",
+ "nesso",
 ]
 
 [[package]]
@@ -100,7 +98,7 @@ dependencies = [
 
 [[package]]
 name = "board_info"
-version = "0.0.1"
+version = "0.0.0"
 dependencies = [
  "embedded-graphics",
  "embedded-hal 1.0.0",
@@ -108,7 +106,7 @@ dependencies = [
  "esp-bootloader-esp-idf",
  "esp-hal",
  "esp-println",
- "nesso-n1",
+ "nesso",
 ]
 
 [[package]]
@@ -242,7 +240,7 @@ dependencies = [
 
 [[package]]
 name = "display_test"
-version = "0.0.1"
+version = "0.0.0"
 dependencies = [
  "embedded-graphics",
  "embedded-hal 1.0.0",
@@ -250,7 +248,7 @@ dependencies = [
  "esp-bootloader-esp-idf",
  "esp-hal",
  "esp-println",
- "nesso-n1",
+ "nesso",
 ]
 
 [[package]]
@@ -483,6 +481,20 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "env_pro_test"
+version = "0.0.0"
+dependencies = [
+ "embedded-graphics",
+ "embedded-hal 1.0.0",
+ "esp-backtrace",
+ "esp-bootloader-esp-idf",
+ "esp-hal",
+ "esp-println",
+ "heapless 0.8.0",
+ "nesso",
 ]
 
 [[package]]
@@ -749,6 +761,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "esp-storage"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cf2b3f00c9f94b27c62a4f5296b19470c3a083c687c8146e554a459f9bee596"
+dependencies = [
+ "document-features",
+ "embedded-storage",
+ "esp-hal",
+ "esp-hal-procmacros",
+ "esp-metadata-generated",
+ "esp-rom-sys",
+ "esp-sync",
+]
+
+[[package]]
 name = "esp-sync"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -951,7 +978,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hello_world"
-version = "0.0.1"
+version = "0.0.0"
 dependencies = [
  "embedded-graphics",
  "embedded-hal 1.0.0",
@@ -959,7 +986,7 @@ dependencies = [
  "esp-bootloader-esp-idf",
  "esp-hal",
  "esp-println",
- "nesso-n1",
+ "nesso",
 ]
 
 [[package]]
@@ -970,7 +997,7 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
 name = "imu_test"
-version = "0.0.1"
+version = "0.0.0"
 dependencies = [
  "embedded-graphics",
  "embedded-hal 1.0.0",
@@ -979,8 +1006,7 @@ dependencies = [
  "esp-hal",
  "esp-println",
  "heapless 0.8.0",
- "nesso-imu",
- "nesso-n1",
+ "nesso",
 ]
 
 [[package]]
@@ -1000,6 +1026,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79cf5c93f93228cf8efb3ba362535fb11199ac548a09ce117c9b1adc3030d706"
 dependencies = [
  "rustversion",
+]
+
+[[package]]
+name = "input_test"
+version = "0.0.0"
+dependencies = [
+ "embedded-graphics",
+ "embedded-hal 1.0.0",
+ "esp-backtrace",
+ "esp-bootloader-esp-idf",
+ "esp-hal",
+ "esp-println",
+ "heapless 0.8.0",
+ "nesso",
 ]
 
 [[package]]
@@ -1104,89 +1144,19 @@ checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
 
 [[package]]
 name = "nesso"
-version = "0.0.1"
-dependencies = [
- "nesso-audio",
- "nesso-display",
- "nesso-imu",
- "nesso-input",
- "nesso-n1",
- "nesso-power",
- "nesso-storage",
- "nesso-touch",
- "nesso-wifi",
-]
-
-[[package]]
-name = "nesso-audio"
-version = "0.0.1"
-dependencies = [
- "embedded-hal 1.0.0",
-]
-
-[[package]]
-name = "nesso-display"
-version = "0.0.1"
-dependencies = [
- "embedded-graphics",
- "embedded-hal 1.0.0",
- "heapless 0.8.0",
-]
-
-[[package]]
-name = "nesso-imu"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "bmi2",
- "embedded-hal 1.0.0",
- "libm",
-]
-
-[[package]]
-name = "nesso-input"
-version = "0.0.1"
-
-[[package]]
-name = "nesso-n1"
-version = "0.0.1"
-dependencies = [
- "embedded-hal 1.0.0",
- "esp-hal",
- "nesso-audio",
- "nesso-display",
-]
-
-[[package]]
-name = "nesso-power"
-version = "0.0.1"
-dependencies = [
- "embedded-hal 1.0.0",
-]
-
-[[package]]
-name = "nesso-storage"
-version = "0.0.1"
-dependencies = [
- "heapless 0.8.0",
-]
-
-[[package]]
-name = "nesso-touch"
-version = "0.0.1"
-dependencies = [
- "embedded-hal 1.0.0",
- "heapless 0.8.0",
-]
-
-[[package]]
-name = "nesso-wifi"
-version = "0.0.1"
-dependencies = [
  "embassy-futures",
+ "embedded-graphics",
+ "embedded-hal 1.0.0",
+ "embedded-storage",
  "esp-hal",
  "esp-radio",
  "esp-rtos",
+ "esp-storage",
  "heapless 0.8.0",
+ "libm",
 ]
 
 [[package]]
@@ -1460,6 +1430,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
+name = "storage_test"
+version = "0.0.0"
+dependencies = [
+ "embedded-graphics",
+ "embedded-hal 1.0.0",
+ "esp-backtrace",
+ "esp-bootloader-esp-idf",
+ "esp-hal",
+ "esp-println",
+ "heapless 0.8.0",
+ "nesso",
+]
+
+[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1562,7 +1546,7 @@ dependencies = [
 
 [[package]]
 name = "touch_test"
-version = "0.0.1"
+version = "0.0.0"
 dependencies = [
  "embedded-graphics",
  "embedded-hal 1.0.0",
@@ -1571,8 +1555,7 @@ dependencies = [
  "esp-hal",
  "esp-println",
  "heapless 0.8.0",
- "nesso-n1",
- "nesso-touch",
+ "nesso",
 ]
 
 [[package]]
@@ -1625,7 +1608,7 @@ checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 
 [[package]]
 name = "wifi_scan"
-version = "0.0.1"
+version = "0.0.0"
 dependencies = [
  "embedded-graphics",
  "embedded-hal 1.0.0",
@@ -1635,8 +1618,7 @@ dependencies = [
  "esp-hal",
  "esp-println",
  "heapless 0.8.0",
- "nesso-n1",
- "nesso-wifi",
+ "nesso",
 ]
 
 [[package]]
