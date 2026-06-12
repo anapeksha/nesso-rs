@@ -23,6 +23,12 @@ jobs:
           components: rust-src
           targets: riscv32imac-unknown-none-elf
 
+      - name: Install nightly docs toolchain
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+          targets: riscv32imac-unknown-none-elf
+
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
 
@@ -38,6 +44,9 @@ jobs:
       - name: Check
         run: cargo check --workspace
 
+      - name: Check all features
+        run: cargo check --workspace --all-features
+
       - name: Build
         run: cargo build --workspace
 
@@ -47,7 +56,12 @@ jobs:
       - name: Docs
         env:
           RUSTDOCFLAGS: -D warnings
-        run: cargo doc --workspace --no-deps
+        run: |
+          cargo +nightly rustdoc -p nesso --lib \
+            -Zbuild-std=core,alloc \
+            --target riscv32imac-unknown-none-elf \
+            --all-features \
+            -- -D warnings
 
       - name: Publish dry-run
         run: cargo publish -p nesso --dry-run --allow-dirty

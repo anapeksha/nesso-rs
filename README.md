@@ -26,7 +26,11 @@ Validated examples currently cover:
 - Passive buzzer tone output
 - BQ27220/AW32001 battery and charger status reads
 - Heapless settings storage
-- ESP32-C6 Wi-Fi scan using `esp-radio`
+- ESP32-C6 Wi-Fi scan/connect/disconnect lifecycle using `esp-radio`
+- ESP32-C6 BLE controller lifecycle with a connectable GATT peripheral example
+  and notification-mirroring GATT surface
+- Motion/context helpers derived from BMI270 acceleration samples
+- Lightweight layout, text, progress, transition, and sprite helpers
 - M5Stack Unit ENV Pro BME688 environmental reads over I2C/Qwiic
 - Board information display
 
@@ -40,17 +44,22 @@ cargo add nesso
 
 Enable Wi-Fi only for applications that use the ESP32-C6 radio:
 
-```toml
-[dependencies]
-nesso = { path = "crates/nesso", features = ["wifi"] }
-esp-alloc = "0.10"
+```bash
+cargo add nesso --features wifi
+cargo add esp-alloc
 ```
 
 Enable ENV Pro support only for applications that use the external unit:
 
-```toml
-[dependencies]
-nesso = { path = "crates/nesso", features = ["env"] }
+```bash
+cargo add nesso --features env
+```
+
+Enable BLE only for applications that use the ESP32-C6 Bluetooth controller:
+
+```bash
+cargo add nesso --features ble
+cargo add esp-alloc
 ```
 
 ## Public Modules
@@ -62,16 +71,23 @@ nesso = { path = "crates/nesso", features = ["env"] }
   integration.
 - `nesso::env`: external environmental unit support, gated behind the `env`
   feature.
+- `nesso::ble`: ESP32-C6 BLE controller lifecycle and HCI handoff, gated
+  behind the `ble` feature.
 - `nesso::touch`: FT6336U touch controller support.
 - `nesso::input`: button event state machine helpers.
 - `nesso::imu`: BMI270 initialization, config upload, and sensor reads.
+- `nesso::motion`: coarse motion and pose helpers built from accelerometer
+  samples.
 - `nesso::audio`: passive buzzer output and blocking tone generation.
 - `nesso::power`: BQ27220 fuel gauge and AW32001 charger status support.
-- `nesso::wifi`: ESP32-C6 Wi-Fi scan support, gated behind the `wifi` feature.
+- `nesso::wifi`: ESP32-C6 Wi-Fi station lifecycle support, gated behind the
+  `wifi` feature.
 - `nesso::storage`: heapless settings storage primitives and
   `esp-storage` flash-backed persistence.
 - `nesso::sprite`: caller-owned RGB565 sprite/framebuffer support for
   flicker-free dirty-region rendering.
+- `nesso::ui`: small `embedded-graphics` layout, label, progress, and
+  transition helpers.
 
 ## Examples
 
@@ -85,10 +101,13 @@ Each public module has one focused hardware or module-validation example:
 | `nesso::touch` | `touch_test` |
 | `nesso::input` | `input_test` |
 | `nesso::imu` | `imu_test` |
+| `nesso::motion` | `motion_test` |
 | `nesso::audio` | `audio_test` |
 | `nesso::power` | `battery_test` |
 | `nesso::wifi` | `wifi_scan` |
+| `nesso::ble` | `ble_peripheral`, `ble_beacon`, `ble_notifications` |
 | `nesso::storage` | `storage_test` |
+| `nesso::ui` | `ui_test` |
 | `nesso::env` | `env_pro_test` |
 
 ## Example
@@ -135,6 +154,15 @@ See `examples/` for hardware-focused examples.
 Wi-Fi is behind the optional `wifi` feature and is initialized lazily with
 `nesso.init_wifi()`. Only applications that enable Wi-Fi need to compile
 `esp-radio`/`esp-rtos` and provide an `esp_alloc` heap for the ESP radio stack.
+
+BLE is behind the optional `ble` feature and is initialized lazily with
+`nesso.init_ble()`. The SDK owns board/controller bring-up and can hand the HCI
+connector to a host stack. The `ble_peripheral` example uses Trouble to
+advertise as `Nesso N1` and exposes a small custom GATT service that can be
+inspected with nRF Connect. The `ble_beacon` example rotates passive
+non-connectable advertising payloads using `nesso::ble::BeaconSchedule`. The
+`ble_notifications` example accepts `app|title|body` writes on the Nesso mirror
+characteristic and displays the latest mirrored phone/app notification.
 
 ## Build
 

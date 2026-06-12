@@ -56,21 +56,41 @@ methods remain out of scope for this refactor.
 ## Storage
 
 Implemented: fixed-size key/value settings store and an optional
-`esp-storage`-backed flash adapter.
+`esp-storage`-backed flash adapter. The SDK now defines the default
+`nesso_settings` partition strategy through `SettingsPartition::DEFAULT`, using
+offset `0x00FC_0000` and a 4 KiB reserved area for the factory Nesso N1 flash
+layout. Applications with custom flash maps can still pass an explicit
+partition or offset.
 
-Gap: Partition-table offsets are application-specific and not specified by the
-Nesso datasheet. The SDK therefore requires applications to provide an explicit
-flash offset instead of hard-coding one.
+Remaining gap: stable named-partition lookup is not exposed by `esp-storage`
+0.9.0. The SDK documents the partition label and offset, but does not parse a
+runtime partition table.
 
 ## Wi-Fi
 
 Implemented: typed ESP32-C6 radio resources, `esp-radio` scan/connect/disconnect
-support, facade-owned Wi-Fi state, and async station APIs with blocking
-convenience wrappers for simple examples.
+support, validated credentials, facade-owned Wi-Fi state, and async station APIs
+with blocking convenience wrappers for simple examples. The `wifi_scan` example
+can optionally connect when `NESSO_WIFI_SSID` and `NESSO_WIFI_PASSWORD` are
+provided at compile time.
 
-Remaining gap: full TCP/IP socket lifecycle is not wrapped by the SDK yet.
-Applications that need non-blocking Wi-Fi should run an Embassy executor and
-use the async station methods exposed by `nesso::wifi`.
+Remaining gap: TCP/IP sockets and application protocols are intentionally not
+wrapped by the SDK. The SDK boundary is board Wi-Fi lifecycle.
+
+## BLE
+
+Implemented: optional `nesso::ble` feature, board-owned ESP32-C6 Bluetooth
+resource handoff, BLE HCI controller initialization through `esp-radio`, HCI
+read/write helpers, owned HCI connector handoff, fixed-capacity
+advertising-data builder, SDK service UUID constants, and a Trouble-based
+connectable peripheral example for nRF Connect validation. Fixed-capacity
+beacon scheduling primitives and a passive rotating beacon example are also
+implemented. Fixed-capacity notification mirror primitives and a GATT write
+example are implemented for phone/app notification mirroring.
+
+Remaining gap: native OS notification capture still requires a companion phone
+app or platform-specific client permission. The SDK exposes the board-side BLE
+transport and mirror data model, not a mobile application.
 
 ## Audio
 
@@ -88,6 +108,16 @@ resistance.
 Remaining gap: IAQ, VOC, and eCO2 estimates are not implemented because they are
 not direct BME688 register outputs. The SDK exposes raw sensor values instead of
 inventing derived air-quality values.
+
+## Motion and UI
+
+Implemented: motion helper module for coarse pose, dominant gravity, and
+still/moving context classification; caller-owned RGB565 sprites; display
+dirty-region primitives; and draw-target-agnostic UI helpers for labels,
+progress bars, layout rows, and integer transitions.
+
+Remaining gap: no app-level view router is included. The SDK intentionally
+provides reusable primitives rather than application/business workflow screens.
 
 ## BSP
 

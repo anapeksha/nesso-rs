@@ -6,7 +6,6 @@ use core::fmt::Write as _;
 use embedded_graphics::{
     pixelcolor::Rgb565,
     prelude::{Point, RgbColor, Size},
-    primitives::Rectangle,
 };
 use embedded_hal::delay::DelayNs;
 use esp_backtrace as _;
@@ -65,6 +64,8 @@ fn run(peripherals: esp_hal::peripherals::Peripherals) -> ! {
         abort()
     }
 
+    let mut previous = ImuLines::new();
+
     loop {
         let acceleration = match nesso.acceleration() {
             Ok(acceleration) => acceleration,
@@ -77,6 +78,7 @@ fn run(peripherals: esp_hal::peripherals::Peripherals) -> ! {
 
         if !render_imu_data(
             &mut nesso.display,
+            &mut previous,
             acceleration.x_mg,
             acceleration.y_mg,
             acceleration.z_mg,
@@ -88,17 +90,31 @@ fn run(peripherals: esp_hal::peripherals::Peripherals) -> ! {
     }
 }
 
-fn render_imu_data(display: &mut NessoDisplay, x: i16, y: i16, z: i16) -> bool {
-    if display
-        .clear_region(
-            &Rectangle::new(Point::new(0, 88), Size::new(135, 110)),
-            Rgb565::BLACK,
-        )
-        .is_err()
-    {
-        return false;
-    }
+struct ImuLines {
+    x: String<32>,
+    y: String<32>,
+    z: String<32>,
+    axis: String<32>,
+}
 
+impl ImuLines {
+    const fn new() -> Self {
+        Self {
+            x: String::new(),
+            y: String::new(),
+            z: String::new(),
+            axis: String::new(),
+        }
+    }
+}
+
+fn render_imu_data(
+    display: &mut NessoDisplay,
+    previous: &mut ImuLines,
+    x: i16,
+    y: i16,
+    z: i16,
+) -> bool {
     let mut x_line = String::<32>::new();
     let mut y_line = String::<32>::new();
     let mut z_line = String::<32>::new();
@@ -108,12 +124,32 @@ fn render_imu_data(display: &mut NessoDisplay, x: i16, y: i16, z: i16) -> bool {
     let _ = write!(z_line, "Z raw {}", z);
     let _ = write!(axis_line, "Gravity {}", dominant_axis(x, y, z));
 
-    display.print_centered(&x_line, 102, Rgb565::WHITE).is_ok()
-        && display.print_centered(&y_line, 122, Rgb565::WHITE).is_ok()
-        && display.print_centered(&z_line, 142, Rgb565::WHITE).is_ok()
-        && display
-            .print_centered(&axis_line, 172, Rgb565::YELLOW)
-            .is_ok()
+    render_changed_line(display, &mut previous.x, 102, &x_line, Rgb565::WHITE)
+        && render_changed_line(display, &mut previous.y, 122, &y_line, Rgb565::WHITE)
+        && render_changed_line(display, &mut previous.z, 142, &z_line, Rgb565::WHITE)
+        && render_changed_line(display, &mut previous.axis, 172, &axis_line, Rgb565::YELLOW)
+}
+
+fn render_changed_line(
+    display: &mut NessoDisplay,
+    previous: &mut String<32>,
+    y: i32,
+    text: &str,
+    color: Rgb565,
+) -> bool {
+    if previous.as_str() == text {
+        return true;
+    }
+
+    previous.clear();
+    if previous.push_str(text).is_err() {
+        return false;
+    }
+
+    let area =
+        embedded_graphics::primitives::Rectangle::new(Point::new(0, y - 10), Size::new(135, 16));
+    display.clear_region(&area, Rgb565::BLACK).is_ok()
+        && display.print_centered(text, y, color).is_ok()
 }
 
 fn show_imu_status(display: &mut NessoDisplay, status: &str, detail: &str, color: Rgb565) {

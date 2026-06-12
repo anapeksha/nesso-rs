@@ -13,14 +13,14 @@ pub const BMI270_ADDRESS_LOW: u8 = 0x68;
 pub const BMI270_ADDRESS_HIGH: u8 = 0x69;
 pub const BMI270_CHIP_ID: u8 = 0x24;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Acceleration {
     pub x_mg: i16,
     pub y_mg: i16,
     pub z_mg: i16,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Gyroscope {
     pub x_mdps: i32,
     pub y_mdps: i32,

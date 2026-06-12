@@ -62,6 +62,32 @@ impl<'a> Sprite<'a> {
         self.pixels
     }
 
+    /// Returns one pixel from the sprite.
+    #[must_use]
+    pub fn pixel(&self, point: Point) -> Option<Rgb565> {
+        self.pixel_index(point).map(|index| self.pixels[index])
+    }
+
+    /// Copies a full-frame RGB565 slice into the sprite.
+    pub fn copy_from_slice(&mut self, pixels: &[Rgb565]) -> Result<(), SpriteError> {
+        if pixels.len() < self.pixels.len() {
+            return Err(SpriteError::BufferTooSmall);
+        }
+        self.pixels.copy_from_slice(&pixels[..self.pixels.len()]);
+        Ok(())
+    }
+
+    /// Draws the sprite into another draw target at `top_left`.
+    pub fn draw_at<D>(&self, target: &mut D, top_left: Point) -> Result<(), D::Error>
+    where
+        D: DrawTarget<Color = Rgb565>,
+    {
+        target.fill_contiguous(
+            &Rectangle::new(top_left, self.size()),
+            self.pixels.iter().copied(),
+        )
+    }
+
     fn pixel_index(&self, point: Point) -> Option<usize> {
         if !self.bounds().contains(point) {
             return None;

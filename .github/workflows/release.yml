@@ -25,6 +25,12 @@ jobs:
           components: rust-src
           targets: riscv32imac-unknown-none-elf
 
+      - name: Install nightly docs toolchain
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+          targets: riscv32imac-unknown-none-elf
+
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
 
@@ -45,8 +51,13 @@ jobs:
           cargo fmt --check --all
           cargo clippy --workspace --all-targets -- -D warnings
           cargo check --workspace
+          cargo check --workspace --all-features
           cargo build --workspace --release
-          cargo doc --workspace --no-deps
+          cargo +nightly rustdoc -p nesso --lib \
+            -Zbuild-std=core,alloc \
+            --target riscv32imac-unknown-none-elf \
+            --all-features \
+            -- -D warnings
 
       - name: Authenticate with crates.io
         id: auth

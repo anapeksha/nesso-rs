@@ -8,6 +8,7 @@ extern crate alloc;
 
 use alloc::{string::String as AllocString, vec::Vec as AllocVec};
 
+use crate::bsp::RadioRuntimeResources;
 use embassy_futures::block_on;
 use esp_hal::{interrupt::software::SoftwareInterruptControl, timer::timg::TimerGroup};
 use esp_radio::wifi::{
@@ -55,6 +56,44 @@ pub struct Credentials {
     pub password: String<64>,
 }
 
+impl Credentials {
+    /// Creates station credentials for a protected network.
+    pub fn new(ssid: &str, password: &str) -> Result<Self, CredentialsError> {
+        let mut stored_ssid = String::new();
+        let mut stored_password = String::new();
+        stored_ssid
+            .push_str(ssid)
+            .map_err(|_| CredentialsError::SsidTooLong)?;
+        stored_password
+            .push_str(password)
+            .map_err(|_| CredentialsError::PasswordTooLong)?;
+        Ok(Self {
+            ssid: stored_ssid,
+            password: stored_password,
+        })
+    }
+
+    /// Creates station credentials for an open network.
+    pub fn open(ssid: &str) -> Result<Self, CredentialsError> {
+        Self::new(ssid, "")
+    }
+
+    /// Returns true when the credentials target an open network.
+    #[must_use]
+    pub fn is_open(&self) -> bool {
+        self.password.is_empty()
+    }
+}
+
+/// Errors returned while building station credentials.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CredentialsError {
+    /// SSID exceeded the 32-byte IEEE 802.11 limit.
+    SsidTooLong,
+    /// Password exceeded the SDK's fixed 64-byte capacity.
+    PasswordTooLong,
+}
+
 /// High-level station state tracked by the SDK wrapper.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WifiState {
@@ -91,6 +130,9 @@ pub trait WifiStation {
 
     /// Returns the current station state.
     fn state(&self) -> WifiState;
+
+    /// Returns true when the station is connected.
+    fn is_connected(&self) -> bool;
 }
 
 /// Errors returned by the ESP radio Wi-Fi wrapper.
@@ -116,26 +158,24 @@ pub enum EspRadioWifiError {
 pub struct RadioResources {
     /// ESP32-C6 Wi-Fi peripheral.
     pub wifi: esp_hal::peripherals::WIFI<'static>,
-    /// Timer group used by the ESP radio runtime.
-    pub timer_group0: esp_hal::peripherals::TIMG0<'static>,
-    /// Software interrupt peripheral used by the ESP radio runtime.
-    pub software_interrupt: esp_hal::peripherals::SW_INTERRUPT<'static>,
 }
 
 /// Stateful Wi-Fi station wrapper for Nesso N1.
 pub struct EspRadioWifi {
     state: WifiState,
     resources: Option<RadioResources>,
+    runtime: Option<RadioRuntimeResources>,
     controller: Option<WifiController<'static>>,
 }
 
 impl EspRadioWifi {
     /// Creates a Wi-Fi wrapper from board-owned radio resources.
     #[must_use]
-    pub const fn new(resources: RadioResources) -> Self {
+    pub const fn new(resources: RadioResources, runtime: RadioRuntimeResources) -> Self {
         Self {
             state: WifiState::Stopped,
             resources: Some(resources),
+            runtime: Some(runtime),
             controller: None,
         }
     }
@@ -154,9 +194,13 @@ impl EspRadioWifi {
             .resources
             .take()
             .ok_or(EspRadioWifiError::ResourcesUnavailable)?;
+        let runtime = self
+            .runtime
+            .take()
+            .ok_or(EspRadioWifiError::ResourcesUnavailable)?;
 
-        let timg0 = TimerGroup::new(resources.timer_group0);
-        let sw_interrupt = SoftwareInterruptControl::new(resources.software_interrupt);
+        let timg0 = TimerGroup::new(runtime.timer_group0);
+        let sw_interrupt = SoftwareInterruptControl::new(runtime.software_interrupt);
         esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
 
         let (controller, _interfaces) = esp_radio::wifi::new(resources.wifi, Default::default())
@@ -225,6 +269,22 @@ impl EspRadioWifi {
         Ok(())
     }
 
+    /// Connects only when the station is not already connected.
+    pub async fn ensure_connected_async(
+        &mut self,
+        credentials: &Credentials,
+    ) -> Result<(), EspRadioWifiError> {
+        if self.is_connected() {
+            return Ok(());
+        }
+        self.connect_async(credentials).await
+    }
+
+    /// Blocking convenience wrapper around [`Self::ensure_connected_async`].
+    pub fn ensure_connected(&mut self, credentials: &Credentials) -> Result<(), EspRadioWifiError> {
+        block_on(self.ensure_connected_async(credentials))
+    }
+
     /// Blocking convenience wrapper around [`Self::disconnect_async`].
     pub fn disconnect(&mut self) -> Result<(), EspRadioWifiError> {
         block_on(self.disconnect_async())
@@ -255,6 +315,14 @@ impl EspRadioWifi {
     pub const fn state(&self) -> WifiState {
         self.state
     }
+
+    /// Returns true when the station reports an active connection.
+    #[must_use]
+    pub fn is_connected(&self) -> bool {
+        self.controller
+            .as_ref()
+            .is_some_and(WifiController::is_connected)
+    }
 }
 
 impl WifiStation for EspRadioWifi {
@@ -282,6 +350,10 @@ impl WifiStation for EspRadioWifi {
     fn state(&self) -> WifiState {
         self.state()
     }
+
+    fn is_connected(&self) -> bool {
+        self.is_connected()
+    }
 }
 
 fn station_config(credentials: &Credentials) -> StationConfig {
@@ -289,7 +361,7 @@ fn station_config(credentials: &Credentials) -> StationConfig {
         .with_ssid(credentials.ssid.as_str())
         .with_password(AllocString::from(credentials.password.as_str()));
 
-    if credentials.password.is_empty() {
+    if credentials.is_open() {
         config = config.with_auth_method(AuthenticationMethod::None);
     }
 

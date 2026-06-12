@@ -1,0 +1,29 @@
+[package]
+name = "ble_peripheral"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version = "0.0.0"
+
+[dependencies]
+nesso = { path = "../../crates/nesso", features = ["ble"] }
+bt-hci.workspace = true
+embedded-graphics.workspace = true
+embassy-futures.workspace = true
+embassy-sync.workspace = true
+esp-alloc.workspace = true
+esp-backtrace.workspace = true
+esp-bootloader-esp-idf.workspace = true
+esp-hal.workspace = true
+esp-println.workspace = true
+esp-radio.workspace = true
+trouble-host.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "ble_peripheral"
+path = "src/main.rs"
+test = false
+bench = false

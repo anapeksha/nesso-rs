@@ -192,6 +192,18 @@ pub type NessoBuzzer = Buzzer<NessoOutput>;
 /// Board-owned radio resources required by `nesso::wifi`.
 #[cfg(feature = "wifi")]
 pub type WifiResources = crate::wifi::RadioResources;
+/// Board-owned Bluetooth resources required by `nesso::ble`.
+#[cfg(feature = "ble")]
+pub type BleResources = crate::ble::BluetoothResources;
+
+/// Shared ESP radio runtime resources used by Wi-Fi or BLE.
+#[cfg(any(feature = "wifi", feature = "ble"))]
+pub struct RadioRuntimeResources {
+    /// Timer group used by the ESP radio runtime.
+    pub timer_group0: esp_hal::peripherals::TIMG0<'static>,
+    /// Software interrupt peripheral used by the ESP radio runtime.
+    pub software_interrupt: esp_hal::peripherals::SW_INTERRUPT<'static>,
+}
 
 /// Core peripherals assembled by [`NessoN1Board::into_core_parts`].
 pub struct NessoCoreParts {
@@ -204,6 +216,12 @@ pub struct NessoCoreParts {
     /// ESP32-C6 radio resources for Wi-Fi.
     #[cfg(feature = "wifi")]
     pub wifi: WifiResources,
+    /// ESP32-C6 Bluetooth controller resources.
+    #[cfg(feature = "ble")]
+    pub ble: BleResources,
+    /// Shared ESP radio runtime resources.
+    #[cfg(any(feature = "wifi", feature = "ble"))]
+    pub radio_runtime: RadioRuntimeResources,
     /// Flash peripheral for application storage.
     pub flash: esp_hal::peripherals::FLASH<'static>,
 }
@@ -440,7 +458,9 @@ impl NessoN1Board {
 
     /// Initializes the display and returns board-owned Wi-Fi resources.
     #[cfg(feature = "wifi")]
-    pub fn into_display_and_wifi(self) -> Result<(NessoDisplay, WifiResources), BoardInitError> {
+    pub fn into_display_and_wifi(
+        self,
+    ) -> Result<(NessoDisplay, WifiResources, RadioRuntimeResources), BoardInitError> {
         let mut delay = Delay::new();
         {
             let mut i2c = Self::configure_i2c(
@@ -464,6 +484,8 @@ impl NessoN1Board {
             display,
             WifiResources {
                 wifi: self.peripherals.WIFI,
+            },
+            RadioRuntimeResources {
                 timer_group0: self.peripherals.TIMG0,
                 software_interrupt: self.peripherals.SW_INTERRUPT,
             },
@@ -501,6 +523,13 @@ impl NessoN1Board {
             #[cfg(feature = "wifi")]
             wifi: WifiResources {
                 wifi: self.peripherals.WIFI,
+            },
+            #[cfg(feature = "ble")]
+            ble: BleResources {
+                bluetooth: self.peripherals.BT,
+            },
+            #[cfg(any(feature = "wifi", feature = "ble"))]
+            radio_runtime: RadioRuntimeResources {
                 timer_group0: self.peripherals.TIMG0,
                 software_interrupt: self.peripherals.SW_INTERRUPT,
             },
