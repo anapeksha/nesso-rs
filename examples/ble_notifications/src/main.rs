@@ -26,6 +26,7 @@ use nesso::{
     Nesso,
     ble::{NotificationMirror, service},
     bsp::NessoDisplay,
+    ui::{TextBlockStyle, draw_wrapped_text},
 };
 use trouble_host::prelude::*;
 
@@ -311,6 +312,8 @@ fn show_status(display: &mut NessoDisplay, title: &str, line1: &str, line2: &str
 }
 
 fn show_notification(display: &mut NessoDisplay, notification: &nesso::ble::MirroredNotification) {
+    let mut encoded = [0_u8; 180];
+    let _encoded_len = notification.write_wire(&mut encoded);
     let _cleared = display.clear_region(
         &Rectangle::new(Point::new(0, 78), Size::new(240, 120)),
         Rgb565::BLACK,
@@ -318,7 +321,12 @@ fn show_notification(display: &mut NessoDisplay, notification: &nesso::ble::Mirr
     let _header = display.print_centered("Notification", 84, Rgb565::CYAN);
     let _app = display.print_at(notification.app(), Point::new(20, 112), Rgb565::GREEN);
     let _title = display.print_at(notification.title(), Point::new(20, 136), Rgb565::WHITE);
-    let _body = display.print_at(notification.body(), Point::new(20, 160), Rgb565::YELLOW);
+    let _body = draw_wrapped_text(
+        display,
+        Rectangle::new(Point::new(20, 154), Size::new(100, 58)),
+        notification.body(),
+        TextBlockStyle::new(Rgb565::YELLOW),
+    );
 }
 
 fn abort() -> ! {

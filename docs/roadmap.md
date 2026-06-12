@@ -19,6 +19,8 @@
 9. Add UI/layout/text/progress/transition helpers on top of `embedded-graphics`.
 10. Define a default SDK settings partition strategy while retaining explicit
     offset support for custom flash maps.
+11. Add wrapped text rendering, BLE notification wire helpers, and checksummed
+    settings persistence.
 
 ## Later
 

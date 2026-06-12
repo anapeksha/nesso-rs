@@ -10,7 +10,10 @@ use esp_backtrace as _;
 use esp_hal::{clock::CpuClock, delay::Delay, main};
 use nesso::{
     Nesso,
-    ui::{Insets, LabelStyle, ScreenLayout, draw_label, draw_progress_bar},
+    ui::{
+        Insets, LabelStyle, ScreenLayout, TextBlockStyle, draw_label, draw_progress_bar,
+        draw_wrapped_text,
+    },
 };
 
 esp_bootloader_esp_idf::esp_app_desc!();
@@ -47,6 +50,13 @@ fn main() -> ! {
             72,
             Rgb565::GREEN,
             Rgb565::new(2, 2, 2),
+        )
+        .is_err()
+        || draw_wrapped_text(
+            &mut nesso.display,
+            layout.row(154, 48, Insets::symmetric(12, 0)),
+            "Wrapped text stays inside its view.",
+            TextBlockStyle::new(Rgb565::YELLOW),
         )
         .is_err()
     {

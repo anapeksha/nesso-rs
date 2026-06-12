@@ -78,6 +78,36 @@ pub struct LabelStyle {
     pub align: TextAlign,
 }
 
+/// Multi-line text drawing style.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TextBlockStyle {
+    /// Text color.
+    pub color: Rgb565,
+    /// Optional background color used to clear the text block first.
+    pub background: Option<Rgb565>,
+    /// Space between text baselines in pixels.
+    pub line_height: u32,
+}
+
+impl TextBlockStyle {
+    /// Creates a text block style with the built-in mono font.
+    #[must_use]
+    pub const fn new(color: Rgb565) -> Self {
+        Self {
+            color,
+            background: None,
+            line_height: 12,
+        }
+    }
+
+    /// Returns this style with a background clear color.
+    #[must_use]
+    pub const fn with_background(mut self, background: Rgb565) -> Self {
+        self.background = Some(background);
+        self
+    }
+}
+
 impl LabelStyle {
     /// Creates a centered label style with no background clear.
     #[must_use]
@@ -201,6 +231,65 @@ where
     Rectangle::new(area.top_left, Size::new(filled_width, area.size.height))
         .into_styled(PrimitiveStyle::with_fill(foreground))
         .draw(target)
+}
+
+/// Draws wrapped text inside `area` and returns the number of lines drawn.
+///
+/// Wrapping uses the built-in 6x10 mono font metrics. Text is clipped at the
+/// bottom of `area`; words longer than the available width are split.
+pub fn draw_wrapped_text<D>(
+    target: &mut D,
+    area: Rectangle,
+    text: &str,
+    style: TextBlockStyle,
+) -> Result<usize, D::Error>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    if let Some(background) = style.background {
+        area.into_styled(PrimitiveStyle::with_fill(background))
+            .draw(target)?;
+    }
+
+    let max_chars = (area.size.width / 6).max(1) as usize;
+    let max_lines = (area.size.height / style.line_height).max(1) as usize;
+    let text_style = MonoTextStyleBuilder::new()
+        .font(&FONT_6X10)
+        .text_color(style.color)
+        .build();
+    let mut lines_drawn = 0usize;
+    let mut remaining = text.trim();
+
+    while !remaining.is_empty() && lines_drawn < max_lines {
+        let (line, rest) = split_line(remaining, max_chars);
+        let baseline = area.top_left.y + 10 + (lines_drawn as i32 * style.line_height as i32);
+        Text::new(line, Point::new(area.top_left.x, baseline), text_style).draw(target)?;
+        lines_drawn += 1;
+        remaining = rest.trim_start();
+    }
+
+    Ok(lines_drawn)
+}
+
+fn split_line(text: &str, max_chars: usize) -> (&str, &str) {
+    if text.chars().count() <= max_chars {
+        return (text, "");
+    }
+
+    let mut split_byte = 0;
+    let mut last_space = None;
+    for (char_count, (byte_index, ch)) in text.char_indices().enumerate() {
+        if char_count == max_chars {
+            break;
+        }
+        split_byte = byte_index + ch.len_utf8();
+        if ch.is_whitespace() {
+            last_space = Some(byte_index);
+        }
+    }
+
+    let split_at = last_space.filter(|space| *space > 0).unwrap_or(split_byte);
+    (&text[..split_at], &text[split_at..])
 }
 
 /// Easing curve for simple frame-based transitions.

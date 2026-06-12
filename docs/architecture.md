@@ -97,7 +97,9 @@ The SDK exposes `SettingsPartition::DEFAULT` for the factory Nesso N1 flash
 layout and the label `nesso_settings` for applications that provide a partition
 table. The explicit-offset constructor remains available for applications that
 own their flash map. This keeps the SDK opinionated for Nesso N1 while avoiding
-hidden writes into application-owned flash in custom layouts.
+hidden writes into application-owned flash in custom layouts. Persisted settings
+use a small versioned image format; v2 images include a checksum and the loader
+keeps v1 compatibility for previously saved data.
 
 ## Motion Model
 
