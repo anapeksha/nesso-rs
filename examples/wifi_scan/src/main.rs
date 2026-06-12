@@ -11,7 +11,7 @@ use heapless::String;
 use nesso::{
     Nesso,
     bsp::NessoDisplay,
-    wifi::{AccessPoint, EspRadioWifiError},
+    wifi::{AccessPoint, Credentials, EspRadioWifiError},
 };
 
 esp_bootloader_esp_idf::esp_app_desc!();
@@ -61,7 +61,24 @@ fn scan_and_render(nesso: &mut Nesso) -> bool {
     };
 
     match wifi.scan() {
-        Ok(aps) => render_scan_results(&mut nesso.display, &aps),
+        Ok(aps) => {
+            if !render_scan_results(&mut nesso.display, &aps) {
+                return false;
+            }
+            if let Some(ssid) = option_env!("NESSO_WIFI_SSID") {
+                let password = option_env!("NESSO_WIFI_PASSWORD").map_or("", |password| password);
+                let credentials = match Credentials::new(ssid, password) {
+                    Ok(credentials) => credentials,
+                    Err(_) => return false,
+                };
+                if wifi.ensure_connected(&credentials).is_err() {
+                    return render_wifi_error(&mut nesso.display, "connect failed");
+                }
+                render_connected(&mut nesso.display, ssid)
+            } else {
+                true
+            }
+        }
         Err(error) => {
             let detail = match error {
                 EspRadioWifiError::Init => "new failed",
@@ -72,10 +89,7 @@ fn scan_and_render(nesso: &mut Nesso) -> bool {
                 EspRadioWifiError::Connect => "connect failed",
                 EspRadioWifiError::Disconnect => "disconnect failed",
             };
-            let _ = nesso.display.clear(Rgb565::BLACK);
-            let _ = nesso.display.print_centered("WiFi Scan", 76, Rgb565::CYAN);
-            let _ = nesso.display.print_centered(detail, 112, Rgb565::RED);
-            false
+            render_wifi_error(&mut nesso.display, detail)
         }
     }
 }
@@ -116,6 +130,24 @@ fn render_scan_results(display: &mut NessoDisplay, aps: &[AccessPoint]) -> bool 
     }
 
     true
+}
+
+fn render_connected(display: &mut NessoDisplay, ssid: &str) -> bool {
+    display.clear(Rgb565::BLACK).is_ok()
+        && display
+            .print_centered("WiFi Connected", 64, Rgb565::CYAN)
+            .is_ok()
+        && display.print_centered(ssid, 106, Rgb565::GREEN).is_ok()
+        && display
+            .print_centered("Station ready", 132, Rgb565::WHITE)
+            .is_ok()
+}
+
+fn render_wifi_error(display: &mut NessoDisplay, detail: &str) -> bool {
+    let _ = display.clear(Rgb565::BLACK);
+    let _ = display.print_centered("WiFi", 76, Rgb565::CYAN);
+    let _ = display.print_centered(detail, 112, Rgb565::RED);
+    false
 }
 
 fn abort() -> ! {

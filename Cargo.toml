@@ -13,6 +13,11 @@ members = [
     "examples/audio_test",
     "examples/battery_test",
     "examples/storage_test",
+    "examples/motion_test",
+    "examples/ui_test",
+    "examples/ble_peripheral",
+    "examples/ble_beacon",
+    "examples/ble_notifications",
 ]
 
 [workspace.package]
@@ -29,8 +34,10 @@ categories = ["embedded", "hardware-support", "no-std"]
 
 [workspace.dependencies]
 bmi2 = { version = "0.1.2", default-features = false }
+bt-hci = { version = "0.8.1", default-features = false }
 embedded-graphics = { version = "0.8.1", default-features = false }
 embassy-futures = { version = "0.1.2", default-features = false }
+embassy-sync = { version = "0.7.2", default-features = false }
 embedded-hal = { version = "1.0.0", default-features = false }
 embedded-hal-async = { version = "1.0.0", default-features = false }
 esp-alloc = { version = "0.10.0", default-features = true, features = [
@@ -57,7 +64,6 @@ esp-radio = { version = "0.18.0", default-features = false, features = [
     "esp-alloc",
     "esp32c6",
     "unstable",
-    "wifi",
 ] }
 esp-rtos = { version = "0.3.0", default-features = false, features = [
     "esp-alloc",
@@ -66,6 +72,11 @@ esp-rtos = { version = "0.3.0", default-features = false, features = [
 ] }
 heapless = { version = "0.8.0", default-features = false }
 nb = "1.1.0"
+trouble-host = { version = "0.6.0", default-features = false, features = [
+    "default-packet-pool",
+    "gatt",
+    "peripheral",
+] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

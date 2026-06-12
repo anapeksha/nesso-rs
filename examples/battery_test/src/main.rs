@@ -35,13 +35,15 @@ fn main() -> ! {
         abort()
     }
 
+    let mut previous = BatteryLines::new();
+
     loop {
         let status = match nesso.battery_status() {
             Ok(status) => status,
             Err(_) => abort(),
         };
 
-        if !render_battery_status(&mut nesso.display, &status) {
+        if !render_battery_status(&mut nesso.display, &mut previous, &status) {
             abort()
         }
 
@@ -49,42 +51,90 @@ fn main() -> ! {
     }
 }
 
-fn render_battery_status(display: &mut NessoDisplay, status: &nesso::power::BatteryStatus) -> bool {
-    if display
-        .clear_region(
-            &Rectangle::new(Point::new(0, 82), Size::new(135, 110)),
-            Rgb565::BLACK,
-        )
-        .is_err()
-    {
-        return false;
-    }
+struct BatteryLines {
+    voltage: String<32>,
+    current: String<32>,
+    percent: String<32>,
+    charge: String<32>,
+}
 
+impl BatteryLines {
+    const fn new() -> Self {
+        Self {
+            voltage: String::new(),
+            current: String::new(),
+            percent: String::new(),
+            charge: String::new(),
+        }
+    }
+}
+
+fn render_battery_status(
+    display: &mut NessoDisplay,
+    previous: &mut BatteryLines,
+    status: &nesso::power::BatteryStatus,
+) -> bool {
     let mut voltage_line = String::<32>::new();
     let mut current_line = String::<32>::new();
     let mut percent_line = String::<32>::new();
+    let mut charge_line = String::<32>::new();
     let _ = write!(voltage_line, "Voltage {} mV", status.voltage_mv);
     let _ = write!(current_line, "Current {} mA", status.current_ma);
     let _ = write!(percent_line, "Battery {}%", status.percentage);
-    let charge_line = match status.charge {
+    let charge = match status.charge {
         ChargeStatus::Unknown => "Charge unknown",
         ChargeStatus::Discharging => "Discharging",
         ChargeStatus::Charging => "Charging",
         ChargeStatus::Full => "Full",
     };
+    let _ = write!(charge_line, "{}", charge);
 
-    display
-        .print_centered(&voltage_line, 96, Rgb565::WHITE)
-        .is_ok()
-        && display
-            .print_centered(&current_line, 116, Rgb565::WHITE)
-            .is_ok()
-        && display
-            .print_centered(&percent_line, 136, Rgb565::YELLOW)
-            .is_ok()
-        && display
-            .print_centered(charge_line, 164, Rgb565::GREEN)
-            .is_ok()
+    render_changed_line(
+        display,
+        &mut previous.voltage,
+        96,
+        &voltage_line,
+        Rgb565::WHITE,
+    ) && render_changed_line(
+        display,
+        &mut previous.current,
+        116,
+        &current_line,
+        Rgb565::WHITE,
+    ) && render_changed_line(
+        display,
+        &mut previous.percent,
+        136,
+        &percent_line,
+        Rgb565::YELLOW,
+    ) && render_changed_line(
+        display,
+        &mut previous.charge,
+        164,
+        &charge_line,
+        Rgb565::GREEN,
+    )
+}
+
+fn render_changed_line(
+    display: &mut NessoDisplay,
+    previous: &mut String<32>,
+    y: i32,
+    text: &str,
+    color: Rgb565,
+) -> bool {
+    if previous.as_str() == text {
+        return true;
+    }
+
+    previous.clear();
+    if previous.push_str(text).is_err() {
+        return false;
+    }
+
+    let area = Rectangle::new(Point::new(0, y - 10), Size::new(135, 16));
+    display.clear_region(&area, Rgb565::BLACK).is_ok()
+        && display.print_centered(text, y, color).is_ok()
 }
 
 fn abort() -> ! {

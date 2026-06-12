@@ -43,6 +43,9 @@
 
 /// Audio support for the Nesso N1 passive buzzer.
 pub mod audio;
+/// Bluetooth Low Energy controller support for the ESP32-C6 radio.
+#[cfg(feature = "ble")]
+pub mod ble;
 /// Board constants and board-specific setup helpers.
 pub mod bsp;
 /// Display support for the Nesso N1 ST7789P3 LCD.
@@ -54,6 +57,8 @@ pub mod env;
 pub mod imu;
 /// Button and input event helpers.
 pub mod input;
+/// Motion classification helpers built on BMI270 accelerometer samples.
+pub mod motion;
 /// Battery, charger, and power-management support.
 pub mod power;
 /// Caller-owned RGB565 sprite/framebuffer support.
@@ -62,10 +67,16 @@ pub mod sprite;
 pub mod storage;
 /// Touch support for the Nesso N1 FT6336U controller.
 pub mod touch;
+/// Small graphics and UI primitives for `embedded-graphics` draw targets.
+pub mod ui;
 /// Wi-Fi support for the ESP32-C6 radio.
 #[cfg(feature = "wifi")]
 pub mod wifi;
 
+#[cfg(feature = "ble")]
+use crate::ble::Ble;
+#[cfg(any(feature = "wifi", feature = "ble"))]
+use crate::bsp::RadioRuntimeResources;
 #[cfg(feature = "wifi")]
 use crate::bsp::WifiResources;
 use crate::bsp::{
@@ -73,7 +84,7 @@ use crate::bsp::{
 };
 use crate::imu::{Acceleration, Bmi270, Gyroscope};
 use crate::power::{BatteryStatus, Power};
-use crate::storage::EspFlashSettingsStore;
+use crate::storage::{EspFlashSettingsStore, SettingsPartition};
 use crate::touch::{Touch, TouchEvent, TouchState};
 #[cfg(feature = "wifi")]
 use crate::wifi::EspRadioWifi;
@@ -92,9 +103,17 @@ pub enum NessoError {
     Power,
     /// The flash peripheral has already been moved out of the facade.
     FlashUnavailable,
+    /// Flash settings partition configuration is invalid.
+    Storage,
     /// The Wi-Fi radio resources have already been moved out of the facade.
     #[cfg(feature = "wifi")]
     WifiUnavailable,
+    /// The BLE controller resources have already been moved out of the facade.
+    #[cfg(feature = "ble")]
+    BleUnavailable,
+    /// Shared radio runtime resources have already been moved out of the facade.
+    #[cfg(any(feature = "wifi", feature = "ble"))]
+    RadioRuntimeUnavailable,
     /// BMI270 has not been initialized with [`Nesso::init_imu`].
     ImuNotInitialized,
     /// Button expander setup or read failed.
@@ -114,6 +133,10 @@ pub struct Nesso {
     i2c: NessoI2c,
     #[cfg(feature = "wifi")]
     wifi: Option<WifiResources>,
+    #[cfg(feature = "ble")]
+    ble: Option<crate::bsp::BleResources>,
+    #[cfg(any(feature = "wifi", feature = "ble"))]
+    radio_runtime: Option<RadioRuntimeResources>,
     flash: Option<esp_hal::peripherals::FLASH<'static>>,
     imu_initialized: bool,
     previous_touch: TouchState,
@@ -131,6 +154,10 @@ impl Nesso {
             i2c: parts.i2c,
             #[cfg(feature = "wifi")]
             wifi: Some(parts.wifi),
+            #[cfg(feature = "ble")]
+            ble: Some(parts.ble),
+            #[cfg(any(feature = "wifi", feature = "ble"))]
+            radio_runtime: Some(parts.radio_runtime),
             flash: Some(parts.flash),
             imu_initialized: false,
             previous_touch: TouchState::default(),
@@ -212,13 +239,52 @@ impl Nesso {
     #[cfg(feature = "wifi")]
     pub fn init_wifi(&mut self) -> Result<EspRadioWifi, NessoError> {
         let wifi = self.wifi.take().ok_or(NessoError::WifiUnavailable)?;
-        Ok(EspRadioWifi::new(wifi))
+        let runtime = self
+            .radio_runtime
+            .take()
+            .ok_or(NessoError::RadioRuntimeUnavailable)?;
+        Ok(EspRadioWifi::new(wifi, runtime))
+    }
+
+    /// Takes the ESP32-C6 Bluetooth resources and creates a BLE controller.
+    ///
+    /// The SDK owns the board lifecycle and returns an HCI connector wrapper.
+    /// GATT services, phone app protocol, and notification semantics are built
+    /// above this layer by a BLE host stack.
+    #[cfg(feature = "ble")]
+    pub fn init_ble(&mut self) -> Result<Ble, NessoError> {
+        let ble = self.ble.take().ok_or(NessoError::BleUnavailable)?;
+        let runtime = self
+            .radio_runtime
+            .take()
+            .ok_or(NessoError::RadioRuntimeUnavailable)?;
+        Ok(Ble::new(ble, runtime))
+    }
+
+    /// Creates a flash-backed settings store at the SDK default partition.
+    ///
+    /// The default region is documented as [`storage::SettingsPartition::DEFAULT`].
+    /// Applications with a custom partition table may prefer
+    /// [`Nesso::take_flash_settings_partition`] or [`Nesso::take_flash_settings`].
+    pub fn take_default_flash_settings(
+        &mut self,
+    ) -> Result<EspFlashSettingsStore<'static>, NessoError> {
+        self.take_flash_settings_partition(SettingsPartition::DEFAULT)
+    }
+
+    /// Creates a flash-backed settings store from a documented flash partition.
+    pub fn take_flash_settings_partition(
+        &mut self,
+        partition: SettingsPartition,
+    ) -> Result<EspFlashSettingsStore<'static>, NessoError> {
+        let flash = self.flash.take().ok_or(NessoError::FlashUnavailable)?;
+        EspFlashSettingsStore::from_partition(flash, partition).map_err(|_| NessoError::Storage)
     }
 
     /// Creates a flash-backed settings store at an application-selected offset.
     ///
-    /// The Nesso N1 datasheet does not define an application settings
-    /// partition, so the SDK requires callers to pass an explicit flash offset.
+    /// Prefer [`Nesso::take_default_flash_settings`] unless the application has
+    /// its own partition table or flash allocation policy.
     pub fn take_flash_settings(
         &mut self,
         offset: u32,

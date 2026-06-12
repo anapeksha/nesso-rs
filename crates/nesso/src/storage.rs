@@ -1,20 +1,61 @@
 use heapless::{String, Vec};
 
+/// Recommended partition label for applications that provide a partition table.
+pub const NESSO_SETTINGS_PARTITION: &str = "nesso_settings";
+/// Default settings offset for the factory 16 MiB Nesso N1 flash layout.
+pub const NESSO_SETTINGS_OFFSET: u32 = 0x00FC_0000;
+/// Reserved byte length for the SDK settings area.
+pub const NESSO_SETTINGS_LEN: u32 = 4096;
+
+/// Flash region used by a settings store.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SettingsPartition {
+    /// Human-readable partition label.
+    pub label: &'static str,
+    /// Absolute flash offset in bytes.
+    pub offset: u32,
+    /// Reserved byte length.
+    pub len: u32,
+}
+
+impl SettingsPartition {
+    /// Recommended SDK settings partition for the factory Nesso N1 flash map.
+    pub const DEFAULT: Self = Self {
+        label: NESSO_SETTINGS_PARTITION,
+        offset: NESSO_SETTINGS_OFFSET,
+        len: NESSO_SETTINGS_LEN,
+    };
+}
+
+/// Errors returned by settings storage operations.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StorageError {
+    /// The requested flash region is too small for the settings image.
+    PartitionTooSmall,
+    /// The requested flash region is not sector aligned.
+    PartitionUnaligned,
+    /// The fixed-capacity settings table is full.
     Full,
+    /// A key exceeded the fixed key capacity.
     KeyTooLong,
+    /// A value exceeded the fixed value capacity.
     ValueTooLong,
+    /// The flash image did not match the SDK settings format.
     InvalidFormat,
+    /// The underlying storage backend returned an error.
     Backend,
 }
 
+/// One fixed-capacity settings entry.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Entry {
+    /// Entry key.
     pub key: String<24>,
+    /// Entry value bytes.
     pub value: Vec<u8, 48>,
 }
 
+/// Heapless fixed-capacity key/value settings store.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SettingsStore {
     entries: Vec<Entry, 4>,
@@ -84,10 +125,13 @@ impl SettingsStore {
 }
 
 pub trait KeyValueStore {
+    /// Driver-specific error type.
     type Error;
 
+    /// Loads settings into `settings`.
     fn load_into(&mut self, settings: &mut SettingsStore) -> Result<(), Self::Error>;
 
+    /// Saves settings from `settings`.
     fn save(&mut self, settings: &SettingsStore) -> Result<(), Self::Error>;
 }
 
@@ -113,8 +157,21 @@ impl<'d> FlashSettingsStore<esp_storage::FlashStorage<'d>> {
     pub fn from_flash(flash: esp_hal::peripherals::FLASH<'d>, offset: u32) -> Self {
         Self::new(esp_storage::FlashStorage::new(flash), offset)
     }
+
+    /// Creates a flash-backed settings store using a documented partition.
+    pub fn from_partition(
+        flash: esp_hal::peripherals::FLASH<'d>,
+        partition: SettingsPartition,
+    ) -> Result<Self, StorageError> {
+        validate_partition(partition)?;
+        Ok(Self::new(
+            esp_storage::FlashStorage::new(flash),
+            partition.offset,
+        ))
+    }
 }
 
+/// Flash-backed settings store over an embedded-storage backend.
 pub struct FlashSettingsStore<STORAGE> {
     storage: STORAGE,
     offset: u32,
@@ -125,6 +182,21 @@ impl<STORAGE> FlashSettingsStore<STORAGE> {
     #[must_use]
     pub const fn new(storage: STORAGE, offset: u32) -> Self {
         Self { storage, offset }
+    }
+
+    /// Creates a flash-backed settings store using a documented partition.
+    pub fn from_storage_partition(
+        storage: STORAGE,
+        partition: SettingsPartition,
+    ) -> Result<Self, StorageError> {
+        validate_partition(partition)?;
+        Ok(Self::new(storage, partition.offset))
+    }
+
+    /// Returns the absolute flash offset used by this store.
+    #[must_use]
+    pub const fn offset(&self) -> u32 {
+        self.offset
     }
 
     /// Releases the wrapped storage backend.
@@ -160,6 +232,16 @@ const SETTINGS_MAGIC: &[u8; 4] = b"NSST";
 const SETTINGS_VERSION: u8 = 1;
 const SETTINGS_IMAGE_LEN: usize = 256;
 const HEADER_LEN: usize = 6;
+
+fn validate_partition(partition: SettingsPartition) -> Result<(), StorageError> {
+    if partition.len < SETTINGS_IMAGE_LEN as u32 {
+        return Err(StorageError::PartitionTooSmall);
+    }
+    if !partition.offset.is_multiple_of(NESSO_SETTINGS_LEN) {
+        return Err(StorageError::PartitionUnaligned);
+    }
+    Ok(())
+}
 
 fn serialize_settings(
     settings: &SettingsStore,

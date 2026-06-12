@@ -1,0 +1,266 @@
+//! Lightweight graphics and UI helpers for Nesso display applications.
+//!
+//! The helpers operate on any `embedded-graphics` draw target and do not own
+//! application state. They are intended for small embedded screens where layout
+//! and dirty-region rendering should stay predictable.
+
+use embedded_graphics::{
+    Drawable,
+    mono_font::{MonoTextStyleBuilder, ascii::FONT_6X10},
+    pixelcolor::Rgb565,
+    prelude::*,
+    primitives::{PrimitiveStyle, Rectangle},
+    text::{Alignment, Text},
+};
+
+/// Insets applied around a rectangle.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct Insets {
+    /// Left inset in pixels.
+    pub left: u32,
+    /// Top inset in pixels.
+    pub top: u32,
+    /// Right inset in pixels.
+    pub right: u32,
+    /// Bottom inset in pixels.
+    pub bottom: u32,
+}
+
+impl Insets {
+    /// Creates symmetric horizontal and vertical insets.
+    #[must_use]
+    pub const fn symmetric(horizontal: u32, vertical: u32) -> Self {
+        Self {
+            left: horizontal,
+            top: vertical,
+            right: horizontal,
+            bottom: vertical,
+        }
+    }
+
+    /// Applies the insets to `area`.
+    #[must_use]
+    pub fn apply(self, area: Rectangle) -> Rectangle {
+        let width = area
+            .size
+            .width
+            .saturating_sub(self.left.saturating_add(self.right));
+        let height = area
+            .size
+            .height
+            .saturating_sub(self.top.saturating_add(self.bottom));
+        Rectangle::new(
+            area.top_left + Point::new(self.left as i32, self.top as i32),
+            Size::new(width, height),
+        )
+    }
+}
+
+/// Horizontal text alignment.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TextAlign {
+    /// Align text to the left edge.
+    Left,
+    /// Align text around the horizontal center.
+    Center,
+    /// Align text to the right edge.
+    Right,
+}
+
+/// Text drawing style for compact embedded UI labels.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LabelStyle {
+    /// Text color.
+    pub color: Rgb565,
+    /// Optional background color used to clear the label area first.
+    pub background: Option<Rgb565>,
+    /// Horizontal alignment.
+    pub align: TextAlign,
+}
+
+impl LabelStyle {
+    /// Creates a centered label style with no background clear.
+    #[must_use]
+    pub const fn centered(color: Rgb565) -> Self {
+        Self {
+            color,
+            background: None,
+            align: TextAlign::Center,
+        }
+    }
+
+    /// Returns this style with a background clear color.
+    #[must_use]
+    pub const fn with_background(mut self, background: Rgb565) -> Self {
+        self.background = Some(background);
+        self
+    }
+}
+
+/// Layout helper for a fixed-size screen.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ScreenLayout {
+    bounds: Rectangle,
+}
+
+impl ScreenLayout {
+    /// Creates a layout helper from a screen size.
+    #[must_use]
+    pub fn new(size: Size) -> Self {
+        Self {
+            bounds: Rectangle::new(Point::zero(), size),
+        }
+    }
+
+    /// Returns the full screen bounds.
+    #[must_use]
+    pub const fn bounds(&self) -> Rectangle {
+        self.bounds
+    }
+
+    /// Returns the content bounds after applying insets.
+    #[must_use]
+    pub fn content(&self, insets: Insets) -> Rectangle {
+        insets.apply(self.bounds)
+    }
+
+    /// Returns a horizontal row inside the screen.
+    #[must_use]
+    pub fn row(&self, y: i32, height: u32, insets: Insets) -> Rectangle {
+        let content = self.content(insets);
+        Rectangle::new(
+            Point::new(content.top_left.x, y),
+            Size::new(content.size.width, height),
+        )
+    }
+}
+
+/// Trait for stateful screens that render into an embedded-graphics target.
+pub trait View<D>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    /// Draws the view into the provided target.
+    fn render(&mut self, target: &mut D) -> Result<(), D::Error>;
+}
+
+/// Draws one text label inside `area`.
+pub fn draw_label<D>(
+    target: &mut D,
+    area: Rectangle,
+    text: &str,
+    style: LabelStyle,
+) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    if let Some(background) = style.background {
+        area.into_styled(PrimitiveStyle::with_fill(background))
+            .draw(target)?;
+    }
+
+    let (x, alignment) = match style.align {
+        TextAlign::Left => (area.top_left.x, Alignment::Left),
+        TextAlign::Center => (
+            area.top_left.x + (area.size.width / 2) as i32,
+            Alignment::Center,
+        ),
+        TextAlign::Right => (area.top_left.x + area.size.width as i32, Alignment::Right),
+    };
+    let y = area.top_left.y + (area.size.height / 2) as i32 + 4;
+    let text_style = MonoTextStyleBuilder::new()
+        .font(&FONT_6X10)
+        .text_color(style.color)
+        .build();
+
+    Text::with_alignment(text, Point::new(x, y), text_style, alignment)
+        .draw(target)
+        .map(|_| ())
+}
+
+/// Draws a horizontal progress bar.
+pub fn draw_progress_bar<D>(
+    target: &mut D,
+    area: Rectangle,
+    value: u8,
+    foreground: Rgb565,
+    background: Rgb565,
+) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    area.into_styled(PrimitiveStyle::with_fill(background))
+        .draw(target)?;
+
+    let clamped = value.min(100);
+    let filled_width = area.size.width.saturating_mul(u32::from(clamped)) / 100;
+    if filled_width == 0 {
+        return Ok(());
+    }
+
+    Rectangle::new(area.top_left, Size::new(filled_width, area.size.height))
+        .into_styled(PrimitiveStyle::with_fill(foreground))
+        .draw(target)
+}
+
+/// Easing curve for simple frame-based transitions.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Easing {
+    /// Linear interpolation.
+    Linear,
+    /// Smooth ease-in/ease-out interpolation.
+    SmoothStep,
+}
+
+/// Integer transition helper for simple embedded animations.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Transition {
+    from: i32,
+    to: i32,
+    frames: u16,
+    current: u16,
+    easing: Easing,
+}
+
+impl Transition {
+    /// Creates a new integer transition.
+    #[must_use]
+    pub const fn new(from: i32, to: i32, frames: u16, easing: Easing) -> Self {
+        Self {
+            from,
+            to,
+            frames,
+            current: 0,
+            easing,
+        }
+    }
+
+    /// Advances the transition by one frame and returns the current value.
+    #[must_use]
+    pub fn step(&mut self) -> i32 {
+        if self.current < self.frames {
+            self.current += 1;
+        }
+        self.value()
+    }
+
+    /// Returns the current interpolated value.
+    #[must_use]
+    pub fn value(&self) -> i32 {
+        if self.frames == 0 {
+            return self.to;
+        }
+        let progress = self.current.min(self.frames) as f32 / self.frames as f32;
+        let t = match self.easing {
+            Easing::Linear => progress,
+            Easing::SmoothStep => progress * progress * (3.0 - 2.0 * progress),
+        };
+        self.from + ((self.to - self.from) as f32 * t) as i32
+    }
+
+    /// Returns true when the transition has reached its final frame.
+    #[must_use]
+    pub const fn is_finished(&self) -> bool {
+        self.current >= self.frames
+    }
+}
