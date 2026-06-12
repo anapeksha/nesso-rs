@@ -35,9 +35,13 @@ fn main() -> ! {
 
 fn validate_settings() -> bool {
     let mut settings = SettingsStore::new();
+    let iter_count = settings.iter().count();
     settings.set("mode", b"demo").is_ok()
         && settings.set("boot", b"ok").is_ok()
+        && settings.set("temp", b"drop").is_ok()
+        && settings.remove("temp")
         && settings.len() == 2
+        && iter_count == 0
         && settings.get("mode").and_then(as_utf8) == Some("demo")
         && settings.get("boot").and_then(as_utf8) == Some("ok")
 }

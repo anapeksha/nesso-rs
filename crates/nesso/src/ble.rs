@@ -392,6 +392,7 @@ impl MirroredNotification {
 
     /// Parses `app|title|body` UTF-8 bytes sent by a phone/app GATT client.
     pub fn from_wire(bytes: &[u8]) -> Result<Self, BleError> {
+        let bytes = trim_trailing_nul(bytes);
         let text = core::str::from_utf8(bytes).map_err(|_| BleError::InvalidNotification)?;
         let mut parts = text.splitn(3, '|');
         let app = parts.next().ok_or(BleError::InvalidNotification)?;
@@ -401,6 +402,34 @@ impl MirroredNotification {
             return Err(BleError::InvalidNotification);
         }
         Self::new(app, title, body, NotificationPriority::Normal)
+    }
+
+    /// Writes this notification as `app|title|body` UTF-8 bytes.
+    pub fn write_wire(&self, output: &mut [u8]) -> Result<usize, BleError> {
+        let fields = [
+            self.app.as_bytes(),
+            self.title.as_bytes(),
+            self.body.as_bytes(),
+        ];
+        let required_len = fields
+            .iter()
+            .map(|field| field.len())
+            .sum::<usize>()
+            .saturating_add(2);
+        if output.len() < required_len {
+            return Err(BleError::NotificationTooLong);
+        }
+
+        let mut cursor = 0;
+        for (index, field) in fields.iter().enumerate() {
+            output[cursor..cursor + field.len()].copy_from_slice(field);
+            cursor += field.len();
+            if index < fields.len() - 1 {
+                output[cursor] = b'|';
+                cursor += 1;
+            }
+        }
+        Ok(cursor)
     }
 
     /// Returns the source application name.
@@ -466,6 +495,17 @@ impl<const N: usize> NotificationMirror<N> {
         self.notifications.last()
     }
 
+    /// Returns an iterator over stored notifications, oldest first.
+    pub fn iter(&self) -> impl Iterator<Item = &MirroredNotification> {
+        self.notifications.iter()
+    }
+
+    /// Returns the fixed inbox capacity.
+    #[must_use]
+    pub const fn capacity(&self) -> usize {
+        N
+    }
+
     /// Returns the number of stored notifications.
     #[must_use]
     pub fn len(&self) -> usize {
@@ -488,6 +528,14 @@ impl<const N: usize> Default for NotificationMirror<N> {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn trim_trailing_nul(bytes: &[u8]) -> &[u8] {
+    let end = bytes
+        .iter()
+        .rposition(|byte| *byte != 0)
+        .map_or(0, |index| index + 1);
+    &bytes[..end]
 }
 
 /// SDK-owned UUIDs for the default Nesso GATT surface.

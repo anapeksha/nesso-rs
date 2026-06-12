@@ -55,12 +55,13 @@ methods remain out of scope for this refactor.
 
 ## Storage
 
-Implemented: fixed-size key/value settings store and an optional
-`esp-storage`-backed flash adapter. The SDK now defines the default
-`nesso_settings` partition strategy through `SettingsPartition::DEFAULT`, using
-offset `0x00FC_0000` and a 4 KiB reserved area for the factory Nesso N1 flash
-layout. Applications with custom flash maps can still pass an explicit
-partition or offset.
+Implemented: fixed-size key/value settings store, removal/iteration helpers,
+and an optional `esp-storage`-backed flash adapter. The SDK now defines the
+default `nesso_settings` partition strategy through `SettingsPartition::DEFAULT`,
+using offset `0x00FC_0000` and a 4 KiB reserved area for the factory Nesso N1
+flash layout. Applications with custom flash maps can still pass an explicit
+partition or offset. Flash persistence writes a v2 settings image with a
+checksum while retaining v1 read compatibility.
 
 Remaining gap: stable named-partition lookup is not exposed by `esp-storage`
 0.9.0. The SDK documents the partition label and offset, but does not parse a

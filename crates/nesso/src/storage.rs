@@ -42,6 +42,8 @@ pub enum StorageError {
     ValueTooLong,
     /// The flash image did not match the SDK settings format.
     InvalidFormat,
+    /// The flash image checksum did not match the stored checksum.
+    ChecksumMismatch,
     /// The underlying storage backend returned an error.
     Backend,
 }
@@ -109,6 +111,26 @@ impl SettingsStore {
             .iter()
             .find(|entry| entry.key == key)
             .map(|entry| entry.value.as_slice())
+    }
+
+    /// Removes a key/value pair and returns whether an entry was removed.
+    pub fn remove(&mut self, key: &str) -> bool {
+        if let Some(index) = self.entries.iter().position(|entry| entry.key == key) {
+            let _removed = self.entries.remove(index);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Removes every setting.
+    pub fn clear(&mut self) {
+        self.entries.clear();
+    }
+
+    /// Returns an iterator over stored entries.
+    pub fn iter(&self) -> impl Iterator<Item = &Entry> {
+        self.entries.iter()
     }
 
     #[must_use]
@@ -229,9 +251,11 @@ where
 }
 
 const SETTINGS_MAGIC: &[u8; 4] = b"NSST";
-const SETTINGS_VERSION: u8 = 1;
+const SETTINGS_VERSION_V1: u8 = 1;
+const SETTINGS_VERSION: u8 = 2;
 const SETTINGS_IMAGE_LEN: usize = 256;
-const HEADER_LEN: usize = 6;
+const HEADER_LEN_V1: usize = 6;
+const HEADER_LEN: usize = 10;
 
 fn validate_partition(partition: SettingsPartition) -> Result<(), StorageError> {
     if partition.len < SETTINGS_IMAGE_LEN as u32 {
@@ -269,6 +293,12 @@ fn serialize_settings(
         cursor += value.len();
     }
 
+    let used_len = u16::try_from(cursor).map_err(|_| StorageError::Full)?;
+    image[6..8].copy_from_slice(&used_len.to_le_bytes());
+    image[8..10].fill(0);
+    let checksum = settings_checksum(image, cursor);
+    image[8..10].copy_from_slice(&checksum.to_le_bytes());
+
     Ok(())
 }
 
@@ -280,13 +310,36 @@ fn deserialize_settings_into(
     if &image[..4] == [0xff; 4].as_slice() {
         return Ok(());
     }
-    if &image[..4] != SETTINGS_MAGIC || image[4] != SETTINGS_VERSION {
+    if &image[..4] != SETTINGS_MAGIC {
         return Err(StorageError::InvalidFormat);
     }
 
-    let count = image[5] as usize;
-    let mut cursor = HEADER_LEN;
+    match image[4] {
+        SETTINGS_VERSION_V1 => {
+            deserialize_records(image, HEADER_LEN_V1, image[5] as usize, settings)
+        }
+        SETTINGS_VERSION => {
+            let used_len = u16::from_le_bytes([image[6], image[7]]) as usize;
+            if !(HEADER_LEN..=image.len()).contains(&used_len) {
+                return Err(StorageError::InvalidFormat);
+            }
+            let expected = u16::from_le_bytes([image[8], image[9]]);
+            let actual = settings_checksum(image, used_len);
+            if expected != actual {
+                return Err(StorageError::ChecksumMismatch);
+            }
+            deserialize_records(image, HEADER_LEN, image[5] as usize, settings)
+        }
+        _ => Err(StorageError::InvalidFormat),
+    }
+}
 
+fn deserialize_records(
+    image: &[u8; SETTINGS_IMAGE_LEN],
+    mut cursor: usize,
+    count: usize,
+    settings: &mut SettingsStore,
+) -> Result<(), StorageError> {
     for _ in 0..count {
         if cursor + 2 > image.len() {
             return Err(StorageError::InvalidFormat);
@@ -306,4 +359,14 @@ fn deserialize_settings_into(
     }
 
     Ok(())
+}
+
+fn checksum16(bytes: &[u8]) -> u16 {
+    bytes.iter().fold(0u16, |checksum, byte| {
+        checksum.wrapping_add(u16::from(*byte))
+    })
+}
+
+fn settings_checksum(image: &[u8; SETTINGS_IMAGE_LEN], used_len: usize) -> u16 {
+    checksum16(&image[..8]).wrapping_add(checksum16(&image[10..used_len]))
 }
