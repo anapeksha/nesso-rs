@@ -1,5 +1,3 @@
-#![no_std]
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ButtonEvent {
     Pressed,
@@ -34,6 +32,7 @@ pub struct Button {
 }
 
 impl Button {
+    /// Creates a button state machine with custom timing thresholds.
     #[must_use]
     pub const fn new(timing: ButtonTiming) -> Self {
         Self {
@@ -45,6 +44,7 @@ impl Button {
         }
     }
 
+    /// Updates the button state and returns an event when one is produced.
     pub fn update(&mut self, is_pressed: bool, now_ms: u32) -> Option<ButtonEvent> {
         match (self.pressed, is_pressed) {
             (false, true) => {

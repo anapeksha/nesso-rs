@@ -41,9 +41,6 @@ jobs:
       - name: Build
         run: cargo build --workspace
 
-      - name: Host tests
-        run: cargo test -p nesso-input -p nesso-storage --target x86_64-unknown-linux-gnu
-
       - name: Release build
         run: cargo build --workspace --release
 
@@ -52,21 +49,5 @@ jobs:
           RUSTDOCFLAGS: -D warnings
         run: cargo doc --workspace --no-deps
 
-      - name: Publish dry-run for leaf crates
-        shell: bash
-        run: |
-          set -euo pipefail
-          crates=(
-            nesso-display
-            nesso-touch
-            nesso-input
-            nesso-imu
-            nesso-audio
-            nesso-power
-            nesso-wifi
-            nesso-storage
-          )
-
-          for crate in "${crates[@]}"; do
-            cargo publish -p "${crate}" --dry-run --allow-dirty
-          done
+      - name: Publish dry-run
+        run: cargo publish -p nesso --dry-run --allow-dirty

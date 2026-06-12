@@ -1,5 +1,13 @@
-#![no_std]
+//! Board support package for the Arduino Nesso N1.
+//!
+//! This crate owns Nesso N1 pin mappings, fixed bus configuration, and concrete
+//! board bring-up helpers. It is intentionally specific to the Nesso N1 and does
+//! not provide a generic board abstraction layer.
 
+use crate::audio::Buzzer;
+use crate::display::{
+    BusConfig, Display, DisplayError, DisplayGeometry, LcdSpiDevice, NullOutputPin, PanelConfig,
+};
 use embedded_hal::{delay::DelayNs, i2c::I2c};
 use esp_hal::{
     Blocking,
@@ -12,80 +20,133 @@ use esp_hal::{
     },
     time::Rate,
 };
-use nesso_audio::Buzzer;
-use nesso_display::{
-    BusConfig, Display, DisplayError, DisplayGeometry, LcdSpiDevice, NullOutputPin, PanelConfig,
-};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BoardError {
+    /// A board resource was requested more than once.
     ResourceConflict,
 }
 
+/// Errors returned while constructing concrete Nesso N1 peripherals.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BoardInitError {
+    /// I2C controller setup failed.
     I2c,
+    /// SPI controller setup failed.
     Spi,
+    /// I/O expander setup failed.
     Expander,
+    /// Display initialization failed.
     Display,
 }
 
+/// AW9523-compatible expander output-enable register.
 pub const EXPANDER_OUTPUT_ENABLE: u8 = 0x03;
+/// AW9523-compatible expander output-state register.
 pub const EXPANDER_OUTPUT_STATE: u8 = 0x05;
+/// AW9523-compatible expander high-impedance register.
 pub const EXPANDER_HIGH_IMPEDANCE: u8 = 0x07;
+/// AW9523-compatible expander default-output register.
 pub const EXPANDER_DEFAULT_OUTPUT: u8 = 0x09;
+/// PI4IOE5V6408 pull-enable register.
+pub const EXPANDER_PULL_ENABLE: u8 = 0x0B;
+/// PI4IOE5V6408 pull-select register. A set bit selects pull-up.
+pub const EXPANDER_PULL_SELECT: u8 = 0x0D;
+/// PI4IOE5V6408 input-state register.
+pub const EXPANDER_INPUT_STATE: u8 = 0x0F;
+/// AW9523-compatible expander interrupt-mask register.
 pub const EXPANDER_INTERRUPT_MASK: u8 = 0x11;
+/// AW9523-compatible expander interrupt-status register.
 pub const EXPANDER_INTERRUPT_STATUS: u8 = 0x13;
 
+/// 7-bit I2C device address used by a board component.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct I2cAddress(pub u8);
 
+/// ESP32-C6 GPIO number used by a board signal.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Gpio(pub u8);
 
+/// Pin exposed by one of the Nesso N1 I/O expanders.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ExpanderPin {
+    /// I2C address of the expander.
     pub address: I2cAddress,
+    /// Expander pin number.
     pub pin: u8,
 }
 
+/// Current logical state of the two board buttons.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ButtonLevels {
+    /// True when KEY1 is pressed.
+    pub key1_pressed: bool,
+    /// True when KEY2 is pressed.
+    pub key2_pressed: bool,
+    /// Raw PI4IOE5V6408 input-state register value.
+    pub raw_input: u8,
+}
+
+/// Location of a board signal.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Signal {
+    /// Signal connected directly to an ESP32-C6 GPIO.
     Native(Gpio),
+    /// Signal connected through an I/O expander.
     Expander(ExpanderPin),
+    /// Named signal whose mapping is documented but not directly controlled here.
     Named(&'static str),
 }
 
+/// Fixed Nesso N1 LCD configuration.
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct DisplayConfig {
+    /// Visible panel width in pixels.
     pub width: u16,
+    /// Visible panel height in pixels.
     pub height: u16,
+    /// Display bus color depth in bits.
     pub color_depth_bits: u8,
+    /// Display controller model.
     pub controller: &'static str,
+    /// SPI MOSI GPIO.
     pub spi_mosi: Gpio,
+    /// SPI MISO GPIO.
     pub spi_miso: Gpio,
+    /// SPI SCK GPIO.
     pub spi_sck: Gpio,
+    /// SPI write frequency.
     pub spi_write_hz: u32,
+    /// Display RAM X offset.
     pub offset_x: u16,
+    /// Display RAM Y offset.
     pub offset_y: u16,
+    /// Whether panel colors must be inverted.
     pub invert_colors: bool,
+    /// LCD chip-select signal.
     pub chip_select: Signal,
+    /// LCD data/command signal.
     pub data_command: Signal,
+    /// LCD reset signal.
     pub reset: Signal,
+    /// LCD backlight signal.
     pub backlight: Signal,
 }
 
+/// Tracks logical resource claims for board-level construction helpers.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct BoardResources {
     claimed: u32,
 }
 
 impl BoardResources {
+    /// Creates an empty resource claim set.
     #[must_use]
     pub const fn new() -> Self {
         Self { claimed: 0 }
     }
 
+    /// Claims one board resource and fails if it was already claimed.
     pub fn claim(&mut self, resource: Resource) -> Result<(), BoardError> {
         let mask = 1_u32 << resource as u8;
         if self.claimed & mask != 0 {
@@ -102,40 +163,68 @@ impl Default for BoardResources {
     }
 }
 
+/// Logical resources that should not be configured twice.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Resource {
+    /// Main I2C bus used by touch, IMU, power, and expanders.
     I2cMain = 0,
+    /// Shared SPI bus used by the display and future SPI peripherals.
     SpiShared = 1,
 }
 
+/// Static Nesso N1 board description and resource claims.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NessoN1 {
     resources: BoardResources,
 }
 
+/// Concrete blocking I2C type used by Nesso N1 helpers.
 pub type NessoI2c = EspI2c<'static, Blocking>;
+/// Concrete blocking SPI type used by Nesso N1 helpers.
 pub type NessoSpi = Spi<'static, Blocking>;
+/// Concrete output-pin type used by Nesso N1 helpers.
 pub type NessoOutput = Output<'static>;
+/// Concrete display type returned by the board support package.
 pub type NessoDisplay =
     Display<LcdSpiDevice<NessoSpi, NessoOutput, Delay>, NessoOutput, NullOutputPin, NullOutputPin>;
+/// Concrete passive-buzzer type returned by the board support package.
 pub type NessoBuzzer = Buzzer<NessoOutput>;
+/// Board-owned radio resources required by `nesso::wifi`.
+#[cfg(feature = "wifi")]
+pub type WifiResources = crate::wifi::RadioResources;
 
-pub struct WifiResources {
-    pub wifi: esp_hal::peripherals::WIFI<'static>,
-    pub timer_group0: esp_hal::peripherals::TIMG0<'static>,
-    pub software_interrupt: esp_hal::peripherals::SW_INTERRUPT<'static>,
+/// Core peripherals assembled by [`NessoN1Board::into_core_parts`].
+pub struct NessoCoreParts {
+    /// Initialized ST7789P3 display.
+    pub display: NessoDisplay,
+    /// Main I2C bus for shared I2C devices.
+    pub i2c: NessoI2c,
+    /// Passive buzzer on the documented buzzer GPIO.
+    pub buzzer: NessoBuzzer,
+    /// ESP32-C6 radio resources for Wi-Fi.
+    #[cfg(feature = "wifi")]
+    pub wifi: WifiResources,
+    /// Flash peripheral for application storage.
+    pub flash: esp_hal::peripherals::FLASH<'static>,
 }
 
+/// Owns ESP-HAL peripherals before they are split into Nesso N1 services.
 pub struct NessoN1Board {
     peripherals: esp_hal::peripherals::Peripherals,
 }
 
 impl NessoN1 {
+    /// Visible LCD width in pixels.
     pub const DISPLAY_WIDTH: u16 = 135;
+    /// Visible LCD height in pixels.
     pub const DISPLAY_HEIGHT: u16 = 240;
+    /// ST7789 column offset for the visible Nesso N1 area.
     pub const DISPLAY_OFFSET_X: u16 = 52;
+    /// ST7789 row offset for the visible Nesso N1 area.
     pub const DISPLAY_OFFSET_Y: u16 = 40;
+    /// Display SPI write frequency.
     pub const DISPLAY_SPI_WRITE_HZ: u32 = 40_000_000;
+    /// Main I2C bus frequency.
     pub const I2C_MAX_HZ: u32 = 400_000;
 
     pub const GPIO_I2C_SDA: Gpio = Gpio(10);
@@ -213,6 +302,7 @@ impl NessoN1 {
         pin: 7,
     };
 
+    /// Creates a board descriptor after claiming core resources.
     pub fn new(mut resources: BoardResources) -> Result<Self, BoardError> {
         resources.claim(Resource::I2cMain)?;
         resources.claim(Resource::SpiShared)?;
@@ -220,6 +310,7 @@ impl NessoN1 {
     }
 
     #[must_use]
+    /// Returns the fixed Nesso N1 display configuration.
     pub const fn display_config() -> DisplayConfig {
         DisplayConfig {
             width: Self::DISPLAY_WIDTH,
@@ -240,6 +331,7 @@ impl NessoN1 {
         }
     }
 
+    /// Configures the LCD reset and backlight expander pins.
     pub fn init_lcd_expander<I2C, Delay, Error>(
         i2c: &mut I2C,
         delay: &mut Delay,
@@ -281,19 +373,51 @@ impl NessoN1 {
             true,
         )
     }
+
+    /// Configures KEY1 and KEY2 as pull-up inputs on the button expander.
+    pub fn init_button_inputs<I2C, Error>(i2c: &mut I2C) -> Result<(), Error>
+    where
+        I2C: I2c<Error = Error>,
+    {
+        let address = Self::ADDR_EXPANDER_0.0;
+        let _discarded = read_register(i2c, address, 0x01)?;
+        write_register(i2c, address, 0x01, 0x01)?;
+        write_register(i2c, address, EXPANDER_DEFAULT_OUTPUT, 0xFF)?;
+        write_register(i2c, address, EXPANDER_INTERRUPT_MASK, 0xFF)?;
+        configure_input_pull_up(i2c, address, Self::KEY1.pin)?;
+        configure_input_pull_up(i2c, address, Self::KEY2.pin)?;
+        let _interrupt_status = read_register(i2c, address, EXPANDER_INTERRUPT_STATUS)?;
+        Ok(())
+    }
+
+    /// Reads KEY1 and KEY2 from the button expander.
+    pub fn read_button_levels<I2C, Error>(i2c: &mut I2C) -> Result<ButtonLevels, Error>
+    where
+        I2C: I2c<Error = Error>,
+    {
+        let pins = read_register(i2c, Self::ADDR_EXPANDER_0.0, EXPANDER_INPUT_STATE)?;
+        Ok(ButtonLevels {
+            key1_pressed: pins & (1u8 << Self::KEY1.pin) == 0,
+            key2_pressed: pins & (1u8 << Self::KEY2.pin) == 0,
+            raw_input: pins,
+        })
+    }
 }
 
 impl NessoN1Board {
+    /// Wraps ESP-HAL peripherals for board-specific construction.
     #[must_use]
     pub const fn new(peripherals: esp_hal::peripherals::Peripherals) -> Self {
         Self { peripherals }
     }
 
+    /// Initializes and returns only the display.
     pub fn into_display(self) -> Result<NessoDisplay, BoardInitError> {
         let (display, _i2c) = self.into_display_and_i2c()?;
         Ok(display)
     }
 
+    /// Initializes the display and returns it with the main I2C bus.
     pub fn into_display_and_i2c(self) -> Result<(NessoDisplay, NessoI2c), BoardInitError> {
         let mut delay = Delay::new();
         let mut i2c = Self::configure_i2c(
@@ -314,6 +438,8 @@ impl NessoN1Board {
         Ok((display, i2c))
     }
 
+    /// Initializes the display and returns board-owned Wi-Fi resources.
+    #[cfg(feature = "wifi")]
     pub fn into_display_and_wifi(self) -> Result<(NessoDisplay, WifiResources), BoardInitError> {
         let mut delay = Delay::new();
         {
@@ -344,7 +470,46 @@ impl NessoN1Board {
         ))
     }
 
+    /// Initializes the core services used by the public `nesso` facade.
+    pub fn into_core_parts(self) -> Result<NessoCoreParts, BoardInitError> {
+        let mut delay = Delay::new();
+        let mut i2c = Self::configure_i2c(
+            self.peripherals.I2C0,
+            self.peripherals.GPIO10,
+            self.peripherals.GPIO8,
+        )?;
+        NessoN1::init_lcd_expander(&mut i2c, &mut delay).map_err(|_| BoardInitError::Expander)?;
+
+        let display = Self::configure_display(
+            self.peripherals.SPI2,
+            self.peripherals.GPIO20,
+            self.peripherals.GPIO21,
+            self.peripherals.GPIO22,
+            self.peripherals.GPIO17,
+            self.peripherals.GPIO16,
+        )?;
+        let buzzer = Buzzer::new(Output::new(
+            self.peripherals.GPIO11,
+            Level::Low,
+            OutputConfig::default(),
+        ));
+
+        Ok(NessoCoreParts {
+            display,
+            i2c,
+            buzzer,
+            #[cfg(feature = "wifi")]
+            wifi: WifiResources {
+                wifi: self.peripherals.WIFI,
+                timer_group0: self.peripherals.TIMG0,
+                software_interrupt: self.peripherals.SW_INTERRUPT,
+            },
+            flash: self.peripherals.FLASH,
+        })
+    }
+
     #[must_use]
+    /// Returns a standalone passive-buzzer driver.
     pub fn into_buzzer(self) -> NessoBuzzer {
         Buzzer::new(Output::new(
             self.peripherals.GPIO11,
@@ -416,15 +581,18 @@ impl NessoN1Board {
     }
 }
 
+/// Compatibility alias for the Nesso N1 board description.
 pub type Board = NessoN1;
 
 impl NessoN1 {
+    /// Returns the resource claim state associated with this board descriptor.
     #[must_use]
     pub fn resources(&self) -> &BoardResources {
         &self.resources
     }
 }
 
+/// Configures an expander pin as a driven output.
 pub fn configure_output<I2C, Error>(i2c: &mut I2C, address: u8, bit: u8) -> Result<(), Error>
 where
     I2C: I2c<Error = Error>,
@@ -433,6 +601,18 @@ where
     write_bit(i2c, address, EXPANDER_HIGH_IMPEDANCE, bit, false)
 }
 
+/// Configures an expander pin as a pull-up input.
+pub fn configure_input_pull_up<I2C, Error>(i2c: &mut I2C, address: u8, bit: u8) -> Result<(), Error>
+where
+    I2C: I2c<Error = Error>,
+{
+    write_bit(i2c, address, EXPANDER_OUTPUT_ENABLE, bit, false)?;
+    write_bit(i2c, address, EXPANDER_HIGH_IMPEDANCE, bit, true)?;
+    write_bit(i2c, address, EXPANDER_PULL_ENABLE, bit, true)?;
+    write_bit(i2c, address, EXPANDER_PULL_SELECT, bit, true)
+}
+
+/// Reads one byte from an I2C expander register.
 pub fn read_register<I2C, Error>(i2c: &mut I2C, address: u8, register: u8) -> Result<u8, Error>
 where
     I2C: I2c<Error = Error>,
@@ -442,6 +622,7 @@ where
     Ok(value[0])
 }
 
+/// Writes one byte to an I2C expander register.
 pub fn write_register<I2C, Error>(
     i2c: &mut I2C,
     address: u8,
@@ -454,6 +635,7 @@ where
     i2c.write(address, &[register, value])
 }
 
+/// Updates one bit in an I2C expander register.
 pub fn write_bit<I2C, Error>(
     i2c: &mut I2C,
     address: u8,

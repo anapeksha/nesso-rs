@@ -1,5 +1,3 @@
-#![no_std]
-
 use bmi2::{
     Bmi2, I2cAddr, config,
     interface::I2cInterface,
@@ -51,6 +49,7 @@ pub struct Bmi270<I2C, DELAY> {
 }
 
 impl<I2C, DELAY> Bmi270<I2C, DELAY> {
+    /// Creates a BMI270 driver using the default I2C address.
     #[must_use]
     pub fn new(i2c: I2C, delay: DELAY) -> Self {
         Self {
@@ -58,6 +57,7 @@ impl<I2C, DELAY> Bmi270<I2C, DELAY> {
         }
     }
 
+    /// Releases the wrapped I2C bus.
     pub fn release(self) -> I2C {
         self.inner.release()
     }
@@ -68,6 +68,7 @@ where
     I2C: I2c<Error = E>,
     DELAY: DelayNs,
 {
+    /// Uploads BMI270 configuration and enables accelerometer and gyroscope output.
     pub fn init(&mut self) -> Result<(), bmi2::types::Error<E>> {
         self.inner.init(&config::BMI270_CONFIG_FILE)?;
         self.inner.set_acc_conf(AccConf {
@@ -94,10 +95,12 @@ where
         })
     }
 
+    /// Reads raw BMI270 accelerometer and gyroscope data.
     pub fn data(&mut self) -> Result<Data, bmi2::types::Error<E>> {
         self.inner.get_data()
     }
 
+    /// Reads accelerometer data in milli-g.
     pub fn acceleration(&mut self) -> Result<Acceleration, bmi2::types::Error<E>> {
         let data = self.data()?;
         Ok(Acceleration {
@@ -107,6 +110,7 @@ where
         })
     }
 
+    /// Reads gyroscope data in milli-degrees per second.
     pub fn gyroscope(&mut self) -> Result<Gyroscope, bmi2::types::Error<E>> {
         let data = self.data()?;
         Ok(Gyroscope {
@@ -118,11 +122,13 @@ where
 }
 
 impl<I2C> Imu<I2C> {
+    /// Creates a low-level BMI270 register reader at the provided I2C address.
     #[must_use]
     pub const fn new(i2c: I2C, address: u8) -> Self {
         Self { i2c, address }
     }
 
+    /// Releases the wrapped I2C bus.
     pub fn release(self) -> I2C {
         self.i2c
     }
@@ -132,6 +138,7 @@ impl<I2C, E> Imu<I2C>
 where
     I2C: I2c<Error = E>,
 {
+    /// Verifies the BMI270 chip identifier.
     pub fn verify(&mut self) -> Result<(), ImuError<E>> {
         let id = self.read_register(0x00).map_err(ImuError::Bus)?;
         if id == BMI270_CHIP_ID {
@@ -141,6 +148,7 @@ where
         }
     }
 
+    /// Reads raw accelerometer registers.
     pub fn accelerometer(&mut self) -> Result<Acceleration, E> {
         let mut data = [0u8; 6];
         self.i2c.write_read(self.address, &[0x0c], &mut data)?;
@@ -151,6 +159,7 @@ where
         })
     }
 
+    /// Reads raw gyroscope registers.
     pub fn gyroscope(&mut self) -> Result<Gyroscope, E> {
         let mut data = [0u8; 6];
         self.i2c.write_read(self.address, &[0x12], &mut data)?;
@@ -161,6 +170,7 @@ where
         })
     }
 
+    /// Estimates pitch and roll from the current accelerometer vector.
     pub fn orientation(&mut self) -> Result<Orientation, E> {
         let accel = self.accelerometer()?;
         let x = f32::from(accel.x_mg);

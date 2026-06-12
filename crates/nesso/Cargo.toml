@@ -4,7 +4,7 @@ description = "Rust SDK facade for Arduino Nesso N1 on ESP32-C6."
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-version.workspace = true
+version = "0.0.2"
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
@@ -14,15 +14,24 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-nesso-audio = { path = "../nesso-audio", version = "0.0.1" }
-nesso-display = { path = "../nesso-display", version = "0.0.1" }
-nesso-imu = { path = "../nesso-imu", version = "0.0.1" }
-nesso-input = { path = "../nesso-input", version = "0.0.1" }
-nesso-n1 = { path = "../nesso-n1", version = "0.0.1" }
-nesso-power = { path = "../nesso-power", version = "0.0.1" }
-nesso-storage = { path = "../nesso-storage", version = "0.0.1" }
-nesso-touch = { path = "../nesso-touch", version = "0.0.1" }
-nesso-wifi = { path = "../nesso-wifi", version = "0.0.1" }
+bmi2.workspace = true
+embedded-graphics.workspace = true
+embedded-hal.workspace = true
+embassy-futures = { workspace = true, optional = true }
+esp-hal.workspace = true
+esp-radio = { workspace = true, optional = true }
+esp-rtos = { workspace = true, optional = true }
+esp-storage = { version = "0.9.0", default-features = false, features = [
+    "esp32c6",
+] }
+embedded-storage = "0.3.1"
+heapless.workspace = true
+libm = { version = "0.2.15", default-features = false }
+
+[features]
+default = []
+env = []
+wifi = ["dep:embassy-futures", "dep:esp-radio", "dep:esp-rtos"]
 
 [lints]
 workspace = true

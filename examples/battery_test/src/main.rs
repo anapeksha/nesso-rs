@@ -3,13 +3,16 @@
 
 use core::fmt::Write as _;
 
-use embedded_graphics::{pixelcolor::Rgb565, prelude::RgbColor};
+use embedded_graphics::{
+    pixelcolor::Rgb565,
+    prelude::{Point, RgbColor, Size},
+    primitives::Rectangle,
+};
 use embedded_hal::delay::DelayNs;
 use esp_backtrace as _;
 use esp_hal::{clock::CpuClock, delay::Delay, main};
 use heapless::String;
-use nesso_n1::{NessoDisplay, NessoN1Board};
-use nesso_power::{ChargeStatus, Power};
+use nesso::{Nesso, bsp::NessoDisplay, power::ChargeStatus};
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
@@ -18,20 +21,27 @@ fn main() -> ! {
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
     let mut delay = Delay::new();
-    let (mut display, i2c) = match NessoN1Board::new(peripherals).into_display_and_i2c() {
-        Ok(parts) => parts,
+    let mut nesso = match Nesso::new(peripherals) {
+        Ok(nesso) => nesso,
         Err(_) => abort(),
     };
 
-    let mut power = Power::new(i2c);
+    if nesso.display.clear(Rgb565::BLACK).is_err()
+        || nesso
+            .display
+            .print_centered("Battery Test", 56, Rgb565::CYAN)
+            .is_err()
+    {
+        abort()
+    }
 
     loop {
-        let status = match power.battery_status() {
+        let status = match nesso.battery_status() {
             Ok(status) => status,
             Err(_) => abort(),
         };
 
-        if !render_battery_status(&mut display, &status) {
+        if !render_battery_status(&mut nesso.display, &status) {
             abort()
         }
 
@@ -39,11 +49,13 @@ fn main() -> ! {
     }
 }
 
-fn render_battery_status(display: &mut NessoDisplay, status: &nesso_power::BatteryStatus) -> bool {
-    if display.clear(Rgb565::BLACK).is_err()
-        || display
-            .print_centered("Battery Test", 56, Rgb565::CYAN)
-            .is_err()
+fn render_battery_status(display: &mut NessoDisplay, status: &nesso::power::BatteryStatus) -> bool {
+    if display
+        .clear_region(
+            &Rectangle::new(Point::new(0, 82), Size::new(135, 110)),
+            Rgb565::BLACK,
+        )
+        .is_err()
     {
         return false;
     }

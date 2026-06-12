@@ -1,5 +1,3 @@
-#![no_std]
-
 use embedded_hal::{delay::DelayNs, digital::OutputPin};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -9,8 +7,10 @@ pub struct Tone {
 }
 
 impl Tone {
+    /// Default tone frequency for the Nesso N1 passive buzzer.
     pub const DEFAULT_BUZZER_HZ: u32 = 4_000;
 
+    /// Creates a tone with the given frequency and duration.
     #[must_use]
     pub const fn new(frequency_hz: u32, duration_ms: u32) -> Self {
         Self {
@@ -25,11 +25,13 @@ pub struct Buzzer<PIN> {
 }
 
 impl<PIN> Buzzer<PIN> {
+    /// Creates a buzzer driver from an output pin.
     #[must_use]
     pub const fn new(pin: PIN) -> Self {
         Self { pin }
     }
 
+    /// Releases the wrapped output pin.
     pub fn release(self) -> PIN {
         self.pin
     }
@@ -39,14 +41,17 @@ impl<PIN, E> Buzzer<PIN>
 where
     PIN: OutputPin<Error = E>,
 {
+    /// Drives the buzzer pin high.
     pub fn on(&mut self) -> Result<(), E> {
         self.pin.set_high()
     }
 
+    /// Drives the buzzer pin low.
     pub fn off(&mut self) -> Result<(), E> {
         self.pin.set_low()
     }
 
+    /// Plays a square-wave tone using a blocking delay provider.
     pub fn play_blocking<Delay>(&mut self, tone: Tone, delay: &mut Delay) -> Result<(), E>
     where
         Delay: DelayNs,

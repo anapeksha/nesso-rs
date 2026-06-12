@@ -3,9 +3,10 @@ name = "touch_test"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-version.workspace = true
+version = "0.0.0"
 
 [dependencies]
+nesso = { path = "../../crates/nesso" }
 embedded-graphics.workspace = true
 embedded-hal.workspace = true
 esp-backtrace.workspace = true
@@ -13,8 +14,6 @@ esp-bootloader-esp-idf.workspace = true
 esp-hal.workspace = true
 esp-println.workspace = true
 heapless.workspace = true
-nesso-n1 = { path = "../../crates/nesso-n1" }
-nesso-touch = { path = "../../crates/nesso-touch" }
 
 [lints]
 workspace = true

@@ -1,5 +1,3 @@
-#![no_std]
-
 use embedded_hal::i2c::I2c;
 
 pub const BQ27220_ADDRESS: u8 = 0x55;
@@ -40,6 +38,7 @@ pub struct Power<I2C> {
 }
 
 impl<I2C> Power<I2C> {
+    /// Creates a power-management reader on the shared Nesso N1 I2C bus.
     #[must_use]
     pub const fn new(i2c: I2C) -> Self {
         Self {
@@ -49,6 +48,7 @@ impl<I2C> Power<I2C> {
         }
     }
 
+    /// Releases the wrapped I2C bus.
     pub fn release(self) -> I2C {
         self.i2c
     }
@@ -58,6 +58,7 @@ impl<I2C, E> Power<I2C>
 where
     I2C: I2c<Error = E>,
 {
+    /// Reads battery voltage, current, percentage, and charge state.
     pub fn battery_status(&mut self) -> Result<BatteryStatus, E> {
         let voltage_mv = self.read_control_word(0x08)?;
         let current_ma = self.read_control_word(BQ27220_CURRENT)? as i16;
@@ -70,10 +71,12 @@ where
         })
     }
 
+    /// Reads battery voltage in millivolts.
     pub fn battery_voltage_mv(&mut self) -> Result<u16, E> {
         self.read_control_word(BQ27220_VOLTAGE)
     }
 
+    /// Calculates battery percentage from remaining and full capacity registers.
     pub fn battery_percentage(&mut self) -> Result<u8, E> {
         let remaining = u32::from(self.read_control_word(BQ27220_REMAIN_CAPACITY)?);
         let full = u32::from(self.read_control_word(BQ27220_FULL_CAPACITY)?);
@@ -83,6 +86,7 @@ where
         Ok(((remaining * 100) / full).min(100) as u8)
     }
 
+    /// Reads charger state from the AW32001 status register.
     pub fn charge_status(&mut self) -> Result<ChargeStatus, E> {
         let status = self.read_charger_register(AW32001_SYS_STATUS)?;
         Ok(match (status >> 3) & 0b11 {
