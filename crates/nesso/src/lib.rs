@@ -1,5 +1,55 @@
 #![no_std]
-#![doc = include_str!("../../../README.md")]
+//! `nesso` is the public Rust facade crate for the Arduino Nesso N1.
+//!
+//! It re-exports the board crate and subsystem crates that make up the SDK:
+//!
+//! - [`bsp`]: Nesso N1 board wiring and board-owned constructors
+//! - [`display`]: ST7789P3 display support
+//! - [`touch`]: FT6336U touch support
+//! - [`imu`]: BMI270 IMU support
+//! - [`audio`]: passive buzzer support
+//! - [`power`]: battery and charger status support
+//! - [`wifi`]: ESP32-C6 Wi-Fi support
+//! - [`storage`]: small settings storage primitives
+//! - [`input`]: input event state machines
+//!
+//! Applications that want board-owned setup should usually start with
+//! [`bsp::NessoN1Board`], then construct a higher-level application state or a
+//! [`Nesso`] facade from the returned parts.
+//!
+//! # Scope
+//!
+//! This crate targets only the Arduino Nesso N1 and does not provide a generic
+//! board abstraction layer for other ESP32-C6 boards.
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! #![no_std]
+//! #![no_main]
+//!
+//! use embedded_graphics::{pixelcolor::Rgb565, prelude::RgbColor};
+//! use embedded_hal::delay::DelayNs;
+//! use esp_hal::{clock::CpuClock, delay::Delay, main};
+//! use nesso::bsp::NessoN1Board;
+//!
+//! #[main]
+//! fn main() -> ! {
+//!     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
+//!     let peripherals = esp_hal::init(config);
+//!     let mut delay = Delay::new();
+//!     let mut display = NessoN1Board::new(peripherals).into_display().unwrap();
+//!
+//!     display.clear(Rgb565::BLACK).unwrap();
+//!     display
+//!         .print_centered("Hello from nesso", 120, Rgb565::WHITE)
+//!         .unwrap();
+//!
+//!     loop {
+//!         delay.delay_ms(1000);
+//!     }
+//! }
+//! ```
 
 /// Audio support for the Nesso N1 passive buzzer.
 pub use nesso_audio as audio;
