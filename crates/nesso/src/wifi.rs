@@ -11,9 +11,8 @@ extern crate alloc;
 
 use alloc::{string::String as AllocString, vec::Vec as AllocVec};
 
-use crate::bsp::RadioRuntimeResources;
+use crate::{bsp::RadioRuntimeResources, runtime};
 use embassy_futures::block_on;
-use esp_hal::{interrupt::software::SoftwareInterruptControl, timer::timg::TimerGroup};
 use esp_radio::wifi::{
     AuthenticationMethod, Config, WifiController, ap::AccessPointInfo, scan::ScanConfig,
     sta::StationConfig,
@@ -176,6 +175,7 @@ pub struct EspRadioWifi {
     state: WifiState,
     resources: Option<RadioResources>,
     runtime: Option<RadioRuntimeResources>,
+    runtime_started: bool,
     controller: Option<WifiController<'static>>,
     interfaces: Option<NetworkInterfaces>,
 }
@@ -188,6 +188,20 @@ impl EspRadioWifi {
             state: WifiState::Stopped,
             resources: Some(resources),
             runtime: Some(runtime),
+            runtime_started: false,
+            controller: None,
+            interfaces: None,
+        }
+    }
+
+    /// Creates a Wi-Fi wrapper when the shared ESP radio runtime is already running.
+    #[must_use]
+    pub const fn new_started(resources: RadioResources) -> Self {
+        Self {
+            state: WifiState::Stopped,
+            resources: Some(resources),
+            runtime: None,
+            runtime_started: true,
             controller: None,
             interfaces: None,
         }
@@ -207,14 +221,14 @@ impl EspRadioWifi {
             .resources
             .take()
             .ok_or(EspRadioWifiError::ResourcesUnavailable)?;
-        let runtime = self
-            .runtime
-            .take()
-            .ok_or(EspRadioWifiError::ResourcesUnavailable)?;
-
-        let timg0 = TimerGroup::new(runtime.timer_group0);
-        let sw_interrupt = SoftwareInterruptControl::new(runtime.software_interrupt);
-        esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
+        if !self.runtime_started {
+            let runtime = self
+                .runtime
+                .take()
+                .ok_or(EspRadioWifiError::ResourcesUnavailable)?;
+            runtime::start_radio_runtime(runtime);
+            self.runtime_started = true;
+        }
 
         let (controller, interfaces) = esp_radio::wifi::new(resources.wifi, Default::default())
             .map_err(|_| EspRadioWifiError::Init)?;

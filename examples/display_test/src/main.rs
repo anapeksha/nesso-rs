@@ -1,11 +1,20 @@
 #![no_std]
 #![no_main]
 
-use embedded_graphics::{pixelcolor::Rgb565, prelude::RgbColor};
+use embedded_graphics::{
+    pixelcolor::Rgb565,
+    prelude::{Point, RgbColor, Size},
+    primitives::Rectangle,
+};
 use embedded_hal::delay::DelayNs;
 use esp_backtrace as _;
 use esp_hal::{clock::CpuClock, delay::Delay, main};
-use nesso::Nesso;
+use nesso::{
+    Nesso,
+    display::DisplayOrientation,
+    sprite::{DirtyRegions, Sprite},
+    ui::{LabelStyle, draw_filled_pill, draw_label},
+};
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
@@ -18,23 +27,40 @@ fn main() -> ! {
         Ok(nesso) => nesso,
         Err(_) => abort(),
     };
+    nesso
+        .display
+        .set_orientation(DisplayOrientation::LandscapeClockwise);
 
-    if nesso.display.clear(Rgb565::BLACK).is_err()
+    let mut pixels = [Rgb565::BLACK; 96 * 32];
+    let mut sprite = match Sprite::new(96, 32, &mut pixels) {
+        Ok(sprite) => sprite,
+        Err(_) => abort(),
+    };
+    let mut dirty = DirtyRegions::<4>::new();
+    let sprite_bounds = sprite.bounds();
+
+    sprite.clear(Rgb565::BLACK);
+    if draw_filled_pill(&mut sprite, sprite_bounds, Rgb565::BLUE).is_err()
+        || draw_label(
+            &mut sprite,
+            sprite_bounds,
+            "Landscape",
+            LabelStyle::centered(Rgb565::WHITE),
+        )
+        .is_err()
+        || dirty.push_clipped(sprite_bounds, sprite_bounds).is_err()
+        || nesso.display.clear(Rgb565::BLACK).is_err()
+        || dirty.flush_sprite(&sprite, &mut nesso.display).is_err()
         || nesso
             .display
-            .print_centered("Display Test", 66, Rgb565::WHITE)
+            .fill_rect(
+                &Rectangle::new(Point::new(116, 48), Size::new(72, 18)),
+                Rgb565::GREEN,
+            )
             .is_err()
         || nesso
             .display
-            .print_centered("Red", 104, Rgb565::RED)
-            .is_err()
-        || nesso
-            .display
-            .print_centered("Green", 126, Rgb565::GREEN)
-            .is_err()
-        || nesso
-            .display
-            .print_centered("Blue", 148, Rgb565::BLUE)
+            .print_centered("Dirty update", 84, Rgb565::YELLOW)
             .is_err()
     {
         abort()

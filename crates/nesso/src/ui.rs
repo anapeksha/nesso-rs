@@ -9,7 +9,7 @@ use embedded_graphics::{
     mono_font::{MonoTextStyleBuilder, ascii::FONT_6X10},
     pixelcolor::Rgb565,
     prelude::*,
-    primitives::{PrimitiveStyle, Rectangle},
+    primitives::{Circle, PrimitiveStyle, Rectangle},
     text::{Alignment, Text},
 };
 
@@ -233,6 +233,84 @@ where
         .draw(target)
 }
 
+/// Draws a filled pill shape inside `area`.
+///
+/// The helper clips naturally through the target. Very narrow areas fall back
+/// to a filled rectangle.
+pub fn draw_filled_pill<D>(target: &mut D, area: Rectangle, color: Rgb565) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    if area.size.width <= area.size.height {
+        return area
+            .into_styled(PrimitiveStyle::with_fill(color))
+            .draw(target);
+    }
+
+    let radius = area.size.height / 2;
+    let diameter = radius * 2;
+    let style = PrimitiveStyle::with_fill(color);
+    Circle::new(area.top_left, diameter)
+        .into_styled(style)
+        .draw(target)?;
+    Circle::new(
+        Point::new(
+            area.top_left.x + area.size.width as i32 - diameter as i32,
+            area.top_left.y,
+        ),
+        diameter,
+    )
+    .into_styled(style)
+    .draw(target)?;
+    Rectangle::new(
+        Point::new(area.top_left.x + radius as i32, area.top_left.y),
+        Size::new(area.size.width - diameter, area.size.height),
+    )
+    .into_styled(style)
+    .draw(target)
+}
+
+/// Draws a filled circular sector in degrees.
+///
+/// `start_degrees` is measured clockwise from the positive X axis and
+/// `sweep_degrees` is clamped to `[-360, 360]`. The implementation is intended
+/// for compact embedded gauges and indicators, not sub-pixel antialiasing.
+pub fn draw_filled_sector<D>(
+    target: &mut D,
+    center: Point,
+    radius: i32,
+    start_degrees: i32,
+    sweep_degrees: i32,
+    color: Rgb565,
+) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    if radius <= 0 || sweep_degrees == 0 {
+        return Ok(());
+    }
+
+    let radius_squared = radius * radius;
+    let sweep = sweep_degrees.clamp(-360, 360);
+    let start = normalize_degrees(start_degrees);
+    let end = normalize_degrees(start_degrees + sweep);
+
+    for y in -radius..=radius {
+        for x in -radius..=radius {
+            if x * x + y * y > radius_squared {
+                continue;
+            }
+
+            let angle = point_degrees(x, y);
+            if angle_in_sweep(angle, start, end, sweep) {
+                Pixel(center + Point::new(x, y), color).draw(target)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Draws wrapped text inside `area` and returns the number of lines drawn.
 ///
 /// Wrapping uses the built-in 6x10 mono font metrics. Text is clipped at the
@@ -290,6 +368,38 @@ fn split_line(text: &str, max_chars: usize) -> (&str, &str) {
 
     let split_at = last_space.filter(|space| *space > 0).unwrap_or(split_byte);
     (&text[..split_at], &text[split_at..])
+}
+
+fn normalize_degrees(degrees: i32) -> i32 {
+    let normalized = degrees % 360;
+    if normalized < 0 {
+        normalized + 360
+    } else {
+        normalized
+    }
+}
+
+fn point_degrees(x: i32, y: i32) -> i32 {
+    let radians = libm::atan2f(y as f32, x as f32);
+    normalize_degrees((radians * 180.0 / core::f32::consts::PI) as i32)
+}
+
+fn angle_in_sweep(angle: i32, start: i32, end: i32, sweep: i32) -> bool {
+    if sweep >= 360 || sweep <= -360 {
+        return true;
+    }
+
+    if sweep > 0 {
+        if start <= end {
+            angle >= start && angle <= end
+        } else {
+            angle >= start || angle <= end
+        }
+    } else if end <= start {
+        angle <= start && angle >= end
+    } else {
+        angle <= start || angle >= end
+    }
 }
 
 /// Easing curve for simple frame-based transitions.

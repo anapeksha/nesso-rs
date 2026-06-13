@@ -69,14 +69,16 @@ runtime partition table.
 
 ## Wi-Fi
 
-Implemented: typed ESP32-C6 radio resources, `esp-radio` scan/connect/disconnect
-support, validated credentials, facade-owned Wi-Fi state, async station APIs
-with blocking convenience wrappers for simple examples, and a one-time
-`NetworkInterfaces` handoff for application-owned `embassy-net` stacks. The
-`wifi_scan` example can optionally connect when `NESSO_WIFI_SSID` and
-`NESSO_WIFI_PASSWORD` are provided at compile time. The `wifi_net_stack` example
-connects, takes the SDK-created interfaces, and creates an `embassy-net` stack
-from `interfaces.station`.
+Implemented: typed ESP32-C6 radio resources, explicit shared radio runtime
+startup through `Nesso::start_async_runtime`, `esp-radio`
+scan/connect/disconnect support, validated credentials, facade-owned Wi-Fi
+state, async station APIs with blocking convenience wrappers for simple
+examples, and a one-time `NetworkInterfaces` handoff for application-owned
+`embassy-net` stacks. The `wifi_scan` example can optionally connect when
+`NESSO_WIFI_SSID` and `NESSO_WIFI_PASSWORD` are provided at compile time. The
+`wifi_net_stack` example starts the runtime explicitly, connects, takes the
+SDK-created interfaces, and creates an `embassy-net` stack from
+`interfaces.station`.
 
 Remaining gap: TCP/IP sockets and application protocols are intentionally not
 wrapped by the SDK. The SDK boundary is board Wi-Fi lifecycle.
@@ -84,8 +86,9 @@ wrapped by the SDK. The SDK boundary is board Wi-Fi lifecycle.
 ## BLE
 
 Implemented: optional `nesso::ble` feature, board-owned ESP32-C6 Bluetooth
-resource handoff, BLE HCI controller initialization through `esp-radio`, HCI
-read/write helpers, owned HCI connector handoff, fixed-capacity
+resource handoff, explicit or lazy shared radio runtime startup, BLE HCI
+controller initialization through `esp-radio`, HCI read/write helpers, owned HCI
+connector handoff, fixed-capacity
 advertising-data builder, SDK service UUID constants, and a Trouble-based
 connectable peripheral example for nRF Connect validation. Fixed-capacity
 beacon scheduling primitives and a passive rotating beacon example are also
@@ -98,7 +101,9 @@ transport and mirror data model, not a mobile application.
 
 ## Audio
 
-Implemented: passive buzzer tones through a generic output abstraction.
+Implemented: passive buzzer tones through a generic output abstraction,
+blocking tone generation, and a fixed-capacity non-blocking tone queue for
+event-loop polling.
 
 Remaining gap: the investigated sources list only a passive buzzer for audio.
 No source lists a microphone, so microphone support remains intentionally absent.
@@ -117,8 +122,9 @@ inventing derived air-quality values.
 
 Implemented: motion helper module for coarse pose, dominant gravity, and
 still/moving context classification; caller-owned RGB565 sprites; display
-dirty-region primitives; and draw-target-agnostic UI helpers for labels,
-progress bars, layout rows, and integer transitions.
+orientation; dirty-region primitives; sprite region iterators; and
+draw-target-agnostic UI helpers for labels, progress bars, layout rows, filled
+pills, filled sectors, and integer transitions.
 
 Remaining gap: no app-level view router is included. The SDK intentionally
 provides reusable primitives rather than application/business workflow screens.

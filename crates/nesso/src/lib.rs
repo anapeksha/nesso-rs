@@ -61,6 +61,9 @@ pub mod input;
 pub mod motion;
 /// Battery, charger, and power-management support.
 pub mod power;
+/// ESP radio runtime startup helpers.
+#[cfg(any(feature = "wifi", feature = "ble"))]
+pub mod runtime;
 /// Caller-owned RGB565 sprite/framebuffer support.
 pub mod sprite;
 /// Settings and key/value storage primitives.
@@ -137,6 +140,8 @@ pub struct Nesso {
     ble: Option<crate::bsp::BleResources>,
     #[cfg(any(feature = "wifi", feature = "ble"))]
     radio_runtime: Option<RadioRuntimeResources>,
+    #[cfg(any(feature = "wifi", feature = "ble"))]
+    radio_runtime_started: bool,
     flash: Option<esp_hal::peripherals::FLASH<'static>>,
     imu_initialized: bool,
     previous_touch: TouchState,
@@ -158,6 +163,8 @@ impl Nesso {
             ble: Some(parts.ble),
             #[cfg(any(feature = "wifi", feature = "ble"))]
             radio_runtime: Some(parts.radio_runtime),
+            #[cfg(any(feature = "wifi", feature = "ble"))]
+            radio_runtime_started: false,
             flash: Some(parts.flash),
             imu_initialized: false,
             previous_touch: TouchState::default(),
@@ -239,6 +246,9 @@ impl Nesso {
     #[cfg(feature = "wifi")]
     pub fn init_wifi(&mut self) -> Result<EspRadioWifi, NessoError> {
         let wifi = self.wifi.take().ok_or(NessoError::WifiUnavailable)?;
+        if self.radio_runtime_started {
+            return Ok(EspRadioWifi::new_started(wifi));
+        }
         let runtime = self
             .radio_runtime
             .take()
@@ -254,11 +264,35 @@ impl Nesso {
     #[cfg(feature = "ble")]
     pub fn init_ble(&mut self) -> Result<Ble, NessoError> {
         let ble = self.ble.take().ok_or(NessoError::BleUnavailable)?;
+        if self.radio_runtime_started {
+            return Ok(Ble::new_started(ble));
+        }
         let runtime = self
             .radio_runtime
             .take()
             .ok_or(NessoError::RadioRuntimeUnavailable)?;
         Ok(Ble::new(ble, runtime))
+    }
+
+    /// Starts the shared ESP radio runtime before Wi-Fi or BLE tasks run.
+    ///
+    /// Call this once in async applications that use Wi-Fi, BLE, or both. After
+    /// it succeeds, [`Nesso::init_wifi`] and [`Nesso::init_ble`] create
+    /// controllers that reuse the already-started runtime. Simple blocking
+    /// examples may skip this and let Wi-Fi or BLE start the runtime lazily.
+    #[cfg(any(feature = "wifi", feature = "ble"))]
+    pub fn start_async_runtime(&mut self) -> Result<(), NessoError> {
+        if self.radio_runtime_started {
+            return Ok(());
+        }
+
+        let runtime = self
+            .radio_runtime
+            .take()
+            .ok_or(NessoError::RadioRuntimeUnavailable)?;
+        runtime::start_radio_runtime(runtime);
+        self.radio_runtime_started = true;
+        Ok(())
     }
 
     /// Creates a flash-backed settings store at the SDK default partition.

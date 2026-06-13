@@ -41,6 +41,9 @@ fn run(peripherals: esp_hal::peripherals::Peripherals) -> ! {
         Ok(nesso) => nesso,
         Err(_) => abort(),
     };
+    if nesso.start_async_runtime().is_err() {
+        abort()
+    }
 
     let ssid = env_or_empty(option_env!("NESSO_WIFI_SSID"));
     let password = env_or_empty(option_env!("NESSO_WIFI_PASSWORD"));
