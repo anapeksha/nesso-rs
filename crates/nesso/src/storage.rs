@@ -171,8 +171,10 @@ impl KeyValueStore for SettingsStore {
     }
 }
 
+#[cfg(not(any(test, nesso_host_tests)))]
 pub type EspFlashSettingsStore<'d> = FlashSettingsStore<esp_storage::FlashStorage<'d>>;
 
+#[cfg(not(any(test, nesso_host_tests)))]
 impl<'d> FlashSettingsStore<esp_storage::FlashStorage<'d>> {
     /// Creates a flash-backed settings store from the ESP-HAL flash peripheral.
     #[must_use]

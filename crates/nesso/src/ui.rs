@@ -9,7 +9,7 @@ use embedded_graphics::{
     mono_font::{MonoTextStyleBuilder, ascii::FONT_6X10},
     pixelcolor::Rgb565,
     prelude::*,
-    primitives::{Circle, PrimitiveStyle, Rectangle},
+    primitives::{Circle, Line, PrimitiveStyle, PrimitiveStyleBuilder, Rectangle},
     text::{Alignment, Text},
 };
 
@@ -270,6 +270,98 @@ where
     .draw(target)
 }
 
+/// Draws a filled rounded rectangle with radius derived from the area height.
+///
+/// This is equivalent to [`draw_filled_pill`] and is intended for compact
+/// embedded cards, chips, and progress indicators.
+pub fn draw_filled_rounded_rect<D>(
+    target: &mut D,
+    area: Rectangle,
+    color: Rgb565,
+) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    draw_filled_pill(target, area, color)
+}
+
+/// Draws an outlined circle.
+pub fn draw_outlined_circle<D>(
+    target: &mut D,
+    top_left: Point,
+    diameter: u32,
+    color: Rgb565,
+    stroke_width: u32,
+) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    Circle::new(top_left, diameter)
+        .into_styled(
+            PrimitiveStyleBuilder::new()
+                .stroke_color(color)
+                .stroke_width(stroke_width)
+                .build(),
+        )
+        .draw(target)
+}
+
+/// Draws a straight line with a fixed stroke width.
+pub fn draw_line<D>(
+    target: &mut D,
+    start: Point,
+    end: Point,
+    color: Rgb565,
+    stroke_width: u32,
+) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    Line::new(start, end)
+        .into_styled(
+            PrimitiveStyleBuilder::new()
+                .stroke_color(color)
+                .stroke_width(stroke_width)
+                .build(),
+        )
+        .draw(target)
+}
+
+/// Draws an approximated circular arc in degrees.
+pub fn draw_arc<D>(
+    target: &mut D,
+    center: Point,
+    radius: i32,
+    start_degrees: i32,
+    sweep_degrees: i32,
+    color: Rgb565,
+) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    if radius <= 0 || sweep_degrees == 0 {
+        return Ok(());
+    }
+    let sweep = sweep_degrees.clamp(-360, 360);
+    let step = if sweep > 0 { 4 } else { -4 };
+    let mut angle = start_degrees;
+    let end = start_degrees + sweep;
+    let mut previous = point_on_circle(center, radius, angle);
+
+    while angle != end {
+        let next_angle = if step > 0 {
+            (angle + step).min(end)
+        } else {
+            (angle + step).max(end)
+        };
+        let next = point_on_circle(center, radius, next_angle);
+        draw_line(target, previous, next, color, 1)?;
+        previous = next;
+        angle = next_angle;
+    }
+    Ok(())
+}
+
 /// Draws a filled circular sector in degrees.
 ///
 /// `start_degrees` is measured clockwise from the positive X axis and
@@ -366,7 +458,10 @@ fn split_line(text: &str, max_chars: usize) -> (&str, &str) {
         }
     }
 
-    let split_at = last_space.filter(|space| *space > 0).unwrap_or(split_byte);
+    let split_at = match last_space {
+        Some(space) if space > 0 => space,
+        _ => split_byte,
+    };
     (&text[..split_at], &text[split_at..])
 }
 
@@ -382,6 +477,14 @@ fn normalize_degrees(degrees: i32) -> i32 {
 fn point_degrees(x: i32, y: i32) -> i32 {
     let radians = libm::atan2f(y as f32, x as f32);
     normalize_degrees((radians * 180.0 / core::f32::consts::PI) as i32)
+}
+
+fn point_on_circle(center: Point, radius: i32, degrees: i32) -> Point {
+    let radians = degrees as f32 * core::f32::consts::PI / 180.0;
+    Point::new(
+        center.x + (libm::cosf(radians) * radius as f32) as i32,
+        center.y + (libm::sinf(radians) * radius as f32) as i32,
+    )
 }
 
 fn angle_in_sweep(angle: i32, start: i32, end: i32, sweep: i32) -> bool {

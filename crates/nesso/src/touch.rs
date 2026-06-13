@@ -1,6 +1,8 @@
 use embedded_hal::i2c::I2c;
 use heapless::Vec;
 
+use crate::display::{DisplayGeometry, DisplayOrientation};
+
 pub const FT6336U_ADDRESS: u8 = 0x38;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -8,6 +10,29 @@ pub struct TouchPoint {
     pub id: u8,
     pub x: u16,
     pub y: u16,
+}
+
+impl TouchPoint {
+    /// Maps this raw touch point into the display's logical orientation.
+    #[must_use]
+    pub fn oriented(self, geometry: DisplayGeometry, orientation: DisplayOrientation) -> Self {
+        let native_width = geometry.width.saturating_sub(1);
+        let native_height = geometry.height.saturating_sub(1);
+        let (x, y) = match orientation {
+            DisplayOrientation::Portrait => (self.x, self.y),
+            DisplayOrientation::PortraitInverted => (
+                native_width.saturating_sub(self.x),
+                native_height.saturating_sub(self.y),
+            ),
+            DisplayOrientation::LandscapeClockwise => {
+                (native_height.saturating_sub(self.y), self.x)
+            }
+            DisplayOrientation::LandscapeCounterClockwise => {
+                (self.y, native_width.saturating_sub(self.x))
+            }
+        };
+        Self { id: self.id, x, y }
+    }
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -26,6 +51,16 @@ impl TouchState {
     /// Returns the first active touch point.
     pub fn primary(&self) -> Option<TouchPoint> {
         self.points.first().copied()
+    }
+
+    /// Returns a copy of this state mapped into the display's logical orientation.
+    #[must_use]
+    pub fn oriented(&self, geometry: DisplayGeometry, orientation: DisplayOrientation) -> Self {
+        let mut points = Vec::new();
+        for point in self.points.iter().copied() {
+            let _ = points.push(point.oriented(geometry, orientation));
+        }
+        Self { points }
     }
 }
 

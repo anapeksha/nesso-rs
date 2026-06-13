@@ -101,6 +101,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ble_notification_mirror"
+version = "0.0.0"
+dependencies = [
+ "embedded-graphics",
+ "embedded-hal 1.0.0",
+ "esp-backtrace",
+ "esp-bootloader-esp-idf",
+ "esp-hal",
+ "nesso",
+]
+
+[[package]]
 name = "ble_notifications"
 version = "0.0.0"
 dependencies = [
@@ -318,6 +330,30 @@ checksum = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
 dependencies = [
  "block-buffer",
  "crypto-common",
+]
+
+[[package]]
+name = "dirty_regions"
+version = "0.0.0"
+dependencies = [
+ "embedded-graphics",
+ "embedded-hal 1.0.0",
+ "esp-backtrace",
+ "esp-bootloader-esp-idf",
+ "esp-hal",
+ "nesso",
+]
+
+[[package]]
+name = "display_orientation"
+version = "0.0.0"
+dependencies = [
+ "embedded-graphics",
+ "embedded-hal 1.0.0",
+ "esp-backtrace",
+ "esp-bootloader-esp-idf",
+ "esp-hal",
+ "nesso",
 ]
 
 [[package]]
@@ -1214,6 +1250,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "input_events"
+version = "0.0.0"
+dependencies = [
+ "embedded-graphics",
+ "embedded-hal 1.0.0",
+ "esp-backtrace",
+ "esp-bootloader-esp-idf",
+ "esp-hal",
+ "heapless 0.8.0",
+ "nesso",
+]
+
+[[package]]
 name = "input_test"
 version = "0.0.0"
 dependencies = [
@@ -1328,6 +1377,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3c8dda44ff03a2f238717214da50f65d5a53b45cd213a7370424ffdb6fae815"
 
 [[package]]
+name = "motion_status"
+version = "0.0.0"
+dependencies = [
+ "embedded-graphics",
+ "embedded-hal 1.0.0",
+ "esp-backtrace",
+ "esp-bootloader-esp-idf",
+ "esp-hal",
+ "heapless 0.8.0",
+ "nesso",
+]
+
+[[package]]
 name = "motion_test"
 version = "0.0.0"
 dependencies = [
@@ -1358,7 +1420,7 @@ checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
 
 [[package]]
 name = "nesso"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "bmi2",
  "embassy-futures",
@@ -1451,6 +1513,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "power_status"
+version = "0.0.0"
+dependencies = [
+ "embedded-graphics",
+ "embedded-hal 1.0.0",
+ "esp-backtrace",
+ "esp-bootloader-esp-idf",
+ "esp-hal",
+ "heapless 0.8.0",
+ "nesso",
+]
+
+[[package]]
 name = "proc-macro-crate"
 version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1466,6 +1541,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "queued_audio"
+version = "0.0.0"
+dependencies = [
+ "esp-backtrace",
+ "esp-bootloader-esp-idf",
+ "esp-hal",
+ "nesso",
 ]
 
 [[package]]
@@ -1669,6 +1754,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0530892bb4fa575ee0da4b86f86c667132a94b74bb72160f58ee5a4afec74c23"
 dependencies = [
  "portable-atomic",
+]
+
+[[package]]
+name = "storage_settings"
+version = "0.0.0"
+dependencies = [
+ "embedded-graphics",
+ "embedded-hal 1.0.0",
+ "esp-backtrace",
+ "esp-bootloader-esp-idf",
+ "esp-hal",
+ "nesso",
 ]
 
 [[package]]

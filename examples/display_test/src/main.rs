@@ -27,9 +27,13 @@ fn main() -> ! {
         Ok(nesso) => nesso,
         Err(_) => abort(),
     };
-    nesso
+    if nesso
         .display
-        .set_orientation(DisplayOrientation::LandscapeClockwise);
+        .set_orientation(DisplayOrientation::LandscapeClockwise)
+        .is_err()
+    {
+        abort()
+    }
 
     let mut pixels = [Rgb565::BLACK; 96 * 32];
     let mut sprite = match Sprite::new(96, 32, &mut pixels) {

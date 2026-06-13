@@ -69,18 +69,21 @@ The command transport is generic over `embedded-hal` SPI and output-pin traits.
 Panel offsets and color inversion are explicit configuration fields because the
 Nesso N1 ST7789 visible area is offset inside display memory.
 
-`nesso::sprite` adds caller-owned RGB565 framebuffers, dirty-region lists, and
-region iterators so applications can render off-screen without a global heap and
-copy only changed areas. `nesso::ui` adds small layout, text, progress-bar,
-shape, and integer-transition helpers that work with any `embedded-graphics`
-target. The SDK keeps these primitives generic and avoids an application
-screen/router framework.
+`nesso::sprite` adds caller-owned RGB565 framebuffers, coalescing dirty-region
+lists, and region iterators so applications can render off-screen without a
+global heap and copy only changed areas. `nesso::ui` adds small layout, text,
+progress-bar, rounded shape, circle, line, arc, sector, and integer-transition
+helpers that work with any `embedded-graphics` target. The SDK keeps these
+primitives generic and avoids an application screen/router framework.
 
 ## Event Model
 
 Buttons are modeled as an edge/state machine producing `Pressed`, `Released`,
 `Held`, `Clicked`, and `DoubleClicked`. Touch state is modeled as sampled points
 with a distinct event type for press, release, move, and idle.
+`nesso::input` also provides generic button timing and touch gesture state
+machines so applications can classify short press, long press, repeat, tap,
+drag, and swipe without embedding navigation policy in the SDK.
 
 ## Async Model
 

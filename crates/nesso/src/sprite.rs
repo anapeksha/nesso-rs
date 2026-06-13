@@ -204,13 +204,47 @@ impl<const N: usize> DirtyRegions<N> {
         region: Rectangle,
         bounds: Rectangle,
     ) -> Result<(), SpriteError> {
+        self.mark(region, bounds)
+    }
+
+    /// Marks a dirty region after clipping and coalescing it with overlaps.
+    pub fn mark(&mut self, region: Rectangle, bounds: Rectangle) -> Result<(), SpriteError> {
         let clipped = region.intersection(&bounds);
         if clipped.is_zero_sized() {
+            return Ok(());
+        }
+        if let Some(existing) = self
+            .regions
+            .iter_mut()
+            .find(|existing| rectangles_touch_or_overlap(**existing, clipped))
+        {
+            *existing = bounding_union(*existing, clipped);
             return Ok(());
         }
         self.regions
             .push(clipped)
             .map_err(|_| SpriteError::DirtyRegionCapacity)
+    }
+
+    /// Coalesces overlapping or touching dirty regions.
+    pub fn coalesce(&mut self) {
+        let mut index = 0;
+        while index < self.regions.len() {
+            let mut other = index + 1;
+            let mut merged = false;
+            while other < self.regions.len() {
+                if rectangles_touch_or_overlap(self.regions[index], self.regions[other]) {
+                    self.regions[index] = bounding_union(self.regions[index], self.regions[other]);
+                    let _removed = self.regions.remove(other);
+                    merged = true;
+                } else {
+                    other += 1;
+                }
+            }
+            if !merged {
+                index += 1;
+            }
+        }
     }
 
     /// Returns an iterator over tracked regions.
@@ -234,6 +268,30 @@ impl<const N: usize> Default for DirtyRegions<N> {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn rectangles_touch_or_overlap(a: Rectangle, b: Rectangle) -> bool {
+    let a_x0 = a.top_left.x;
+    let a_y0 = a.top_left.y;
+    let a_x1 = a.top_left.x + a.size.width as i32;
+    let a_y1 = a.top_left.y + a.size.height as i32;
+    let b_x0 = b.top_left.x;
+    let b_y0 = b.top_left.y;
+    let b_x1 = b.top_left.x + b.size.width as i32;
+    let b_y1 = b.top_left.y + b.size.height as i32;
+
+    a_x0 <= b_x1 && b_x0 <= a_x1 && a_y0 <= b_y1 && b_y0 <= a_y1
+}
+
+fn bounding_union(a: Rectangle, b: Rectangle) -> Rectangle {
+    let x0 = a.top_left.x.min(b.top_left.x);
+    let y0 = a.top_left.y.min(b.top_left.y);
+    let x1 = (a.top_left.x + a.size.width as i32).max(b.top_left.x + b.size.width as i32);
+    let y1 = (a.top_left.y + a.size.height as i32).max(b.top_left.y + b.size.height as i32);
+    Rectangle::new(
+        Point::new(x0, y0),
+        Size::new((x1 - x0) as u32, (y1 - y0) as u32),
+    )
 }
 
 impl DrawTarget for Sprite<'_> {

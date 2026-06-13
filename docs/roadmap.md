@@ -26,6 +26,9 @@
 13. Add explicit shared radio runtime startup, display orientation,
     dirty-region sprite helpers, non-blocking buzzer playback, and generic UI
     shape primitives.
+14. Add Wi-Fi RSSI/connection snapshots, orientation-aware touch mapping,
+    coalescing dirty regions, input gesture helpers, power helpers, and broader
+    capability validation examples.
 
 ## Later
 
