@@ -23,6 +23,9 @@
     settings persistence.
 12. Add Wi-Fi station network-interface handoff for application-owned
     `embassy-net` stacks.
+13. Add explicit shared radio runtime startup, display orientation,
+    dirty-region sprite helpers, non-blocking buzzer playback, and generic UI
+    shape primitives.
 
 ## Later
 

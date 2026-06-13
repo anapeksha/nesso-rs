@@ -19,11 +19,12 @@ other ESP32-C6 boards.
 
 Validated examples currently cover:
 
-- ST7789P3 display initialization and text rendering
+- ST7789P3 display initialization, orientation, text rendering, and partial
+  sprite updates
 - FT6336U touch reads
 - BMI270 IMU live axis reads
 - KEY1/KEY2 button events
-- Passive buzzer tone output
+- Passive buzzer tone output with blocking and non-blocking queued playback
 - BQ27220/AW32001 battery and charger status reads
 - Heapless settings storage
 - ESP32-C6 Wi-Fi scan/connect/disconnect lifecycle and `embassy-net`
@@ -31,7 +32,7 @@ Validated examples currently cover:
 - ESP32-C6 BLE controller lifecycle with a connectable GATT peripheral example
   and notification-mirroring GATT surface
 - Motion/context helpers derived from BMI270 acceleration samples
-- Lightweight layout, text, progress, transition, and sprite helpers
+- Lightweight layout, text, progress, transition, shape, and sprite helpers
 - M5Stack Unit ENV Pro BME688 environmental reads over I2C/Qwiic
 - Board information display
 
@@ -74,22 +75,25 @@ cargo add esp-alloc
   feature.
 - `nesso::ble`: ESP32-C6 BLE controller lifecycle and HCI handoff, gated
   behind the `ble` feature.
+- `nesso::runtime`: explicit ESP radio runtime startup helpers for Wi-Fi/BLE
+  async applications.
 - `nesso::touch`: FT6336U touch controller support.
 - `nesso::input`: button event state machine helpers.
 - `nesso::imu`: BMI270 initialization, config upload, and sensor reads.
 - `nesso::motion`: coarse motion and pose helpers built from accelerometer
   samples.
-- `nesso::audio`: passive buzzer output and blocking tone generation.
+- `nesso::audio`: passive buzzer output with blocking and queued non-blocking
+  tone generation.
 - `nesso::power`: BQ27220 fuel gauge and AW32001 charger status support.
 - `nesso::wifi`: ESP32-C6 Wi-Fi station lifecycle support and network interface
   handoff for application-owned network stacks, gated behind the `wifi`
   feature.
 - `nesso::storage`: heapless settings storage primitives and
   `esp-storage` flash-backed persistence.
-- `nesso::sprite`: caller-owned RGB565 sprite/framebuffer support for
-  flicker-free dirty-region rendering.
+- `nesso::sprite`: caller-owned RGB565 sprite/framebuffer support, sprite
+  region iterators, and dirty-region flushing.
 - `nesso::ui`: small `embedded-graphics` layout, label, progress, and
-  transition helpers.
+  transition helpers plus generic shape primitives.
 
 ## Examples
 
@@ -156,6 +160,9 @@ See `examples/` for hardware-focused examples.
 Wi-Fi is behind the optional `wifi` feature and is initialized lazily with
 `nesso.init_wifi()`. Only applications that enable Wi-Fi need to compile
 `esp-radio`/`esp-rtos` and provide an `esp_alloc` heap for the ESP radio stack.
+Async applications that use Wi-Fi, BLE, or both can call
+`nesso.start_async_runtime()` before creating radio controllers so task startup
+ordering is explicit.
 Applications that need TCP/IP create their own `embassy-net` stack by calling
 `wifi.take_interfaces()` and passing `interfaces.station` to `embassy-net`.
 The SDK continues to own station control through the same `EspRadioWifi` value.

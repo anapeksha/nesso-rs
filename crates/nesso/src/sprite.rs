@@ -1,4 +1,5 @@
 use embedded_graphics::{pixelcolor::Rgb565, prelude::*, primitives::Rectangle};
+use heapless::Vec;
 
 /// Caller-owned RGB565 sprite buffer.
 ///
@@ -88,11 +89,150 @@ impl<'a> Sprite<'a> {
         )
     }
 
+    /// Draws a clipped sprite region into another draw target.
+    ///
+    /// `source_area` is interpreted in sprite-local coordinates. Pixels outside
+    /// the sprite are clipped before drawing, and `dest_top_left` is the target
+    /// coordinate for the clipped region's top-left corner.
+    pub fn draw_region_at<D>(
+        &self,
+        target: &mut D,
+        source_area: &Rectangle,
+        dest_top_left: Point,
+    ) -> Result<(), D::Error>
+    where
+        D: DrawTarget<Color = Rgb565>,
+    {
+        let clipped = source_area.intersection(&self.bounds());
+        if clipped.is_zero_sized() {
+            return Ok(());
+        }
+
+        let offset = clipped.top_left - source_area.top_left;
+        let target_area = Rectangle::new(dest_top_left + offset, clipped.size);
+        target.fill_contiguous(&target_area, self.region_pixels(&clipped))
+    }
+
+    /// Returns an iterator over a clipped region in row-major order.
+    pub fn region_pixels(&self, area: &Rectangle) -> SpriteRegionPixels<'_> {
+        let clipped = area.intersection(&self.bounds());
+        SpriteRegionPixels {
+            pixels: self.pixels,
+            stride: usize::from(self.width),
+            x: clipped.top_left.x.max(0) as usize,
+            y: clipped.top_left.y.max(0) as usize,
+            width: clipped.size.width as usize,
+            height: clipped.size.height as usize,
+            current_x: 0,
+            current_y: 0,
+        }
+    }
+
     fn pixel_index(&self, point: Point) -> Option<usize> {
         if !self.bounds().contains(point) {
             return None;
         }
         Some(point.y as usize * usize::from(self.width) + point.x as usize)
+    }
+}
+
+/// Iterator over a sprite region in row-major order.
+pub struct SpriteRegionPixels<'a> {
+    pixels: &'a [Rgb565],
+    stride: usize,
+    x: usize,
+    y: usize,
+    width: usize,
+    height: usize,
+    current_x: usize,
+    current_y: usize,
+}
+
+impl Iterator for SpriteRegionPixels<'_> {
+    type Item = Rgb565;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_y >= self.height {
+            return None;
+        }
+
+        let index = (self.y + self.current_y) * self.stride + self.x + self.current_x;
+        let color = self.pixels.get(index).copied();
+        self.current_x += 1;
+        if self.current_x >= self.width {
+            self.current_x = 0;
+            self.current_y += 1;
+        }
+        color
+    }
+}
+
+/// Fixed-capacity list of dirty rectangles.
+pub struct DirtyRegions<const N: usize> {
+    regions: Vec<Rectangle, N>,
+}
+
+impl<const N: usize> DirtyRegions<N> {
+    /// Creates an empty dirty-region list.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            regions: Vec::new(),
+        }
+    }
+
+    /// Removes all tracked regions.
+    pub fn clear(&mut self) {
+        self.regions.clear();
+    }
+
+    /// Returns the number of tracked regions.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.regions.len()
+    }
+
+    /// Returns true when no dirty regions are tracked.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.regions.is_empty()
+    }
+
+    /// Adds a dirty region after clipping it to `bounds`.
+    pub fn push_clipped(
+        &mut self,
+        region: Rectangle,
+        bounds: Rectangle,
+    ) -> Result<(), SpriteError> {
+        let clipped = region.intersection(&bounds);
+        if clipped.is_zero_sized() {
+            return Ok(());
+        }
+        self.regions
+            .push(clipped)
+            .map_err(|_| SpriteError::DirtyRegionCapacity)
+    }
+
+    /// Returns an iterator over tracked regions.
+    pub fn iter(&self) -> impl Iterator<Item = &Rectangle> {
+        self.regions.iter()
+    }
+
+    /// Copies all dirty regions from a sprite to a draw target.
+    pub fn flush_sprite<D>(&self, sprite: &Sprite<'_>, target: &mut D) -> Result<(), D::Error>
+    where
+        D: DrawTarget<Color = Rgb565>,
+    {
+        for region in self.iter() {
+            sprite.draw_region_at(target, region, region.top_left)?;
+        }
+        Ok(())
+    }
+}
+
+impl<const N: usize> Default for DirtyRegions<N> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -168,4 +308,6 @@ impl OriginDimensions for Sprite<'_> {
 pub enum SpriteError {
     /// The provided pixel buffer is smaller than `width * height`.
     BufferTooSmall,
+    /// The dirty-region list is full.
+    DirtyRegionCapacity,
 }

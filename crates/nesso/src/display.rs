@@ -24,10 +24,19 @@ pub enum DisplayError<SpiError, PinError> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Rotation {
+pub enum DisplayOrientation {
+    /// Native Nesso N1 portrait orientation, 135 x 240 logical pixels.
     Portrait,
-    Landscape,
+    /// Portrait rotated 180 degrees, 135 x 240 logical pixels.
+    PortraitInverted,
+    /// Landscape orientation with logical pixels rotated clockwise.
+    LandscapeClockwise,
+    /// Landscape orientation with logical pixels rotated counter-clockwise.
+    LandscapeCounterClockwise,
 }
+
+/// Backwards-compatible alias for the display orientation type.
+pub type Rotation = DisplayOrientation;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DisplayGeometry {
@@ -56,7 +65,7 @@ pub struct Display<SPI, DC, RST, BL> {
     backlight: BL,
     panel: PanelConfig,
     bus: BusConfig,
-    rotation: Rotation,
+    orientation: DisplayOrientation,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -193,7 +202,7 @@ impl<SPI, DC, RST, BL> Display<SPI, DC, RST, BL> {
             backlight,
             panel,
             bus,
-            rotation: Rotation::Portrait,
+            orientation: DisplayOrientation::Portrait,
         }
     }
 
@@ -215,15 +224,30 @@ impl<SPI, DC, RST, BL> Display<SPI, DC, RST, BL> {
         self.panel
     }
 
-    /// Returns the current logical rotation.
+    /// Returns the current logical orientation.
+    #[must_use]
+    pub const fn orientation(&self) -> DisplayOrientation {
+        self.orientation
+    }
+
+    /// Returns the current logical orientation.
     #[must_use]
     pub const fn rotation(&self) -> Rotation {
-        self.rotation
+        self.orientation
+    }
+
+    /// Sets the logical orientation used by the driver.
+    ///
+    /// All `DrawTarget`, text, fill, and blit coordinates are interpreted in
+    /// this logical orientation and clipped before they are mapped to the
+    /// native panel memory coordinates.
+    pub fn set_orientation(&mut self, orientation: DisplayOrientation) {
+        self.orientation = orientation;
     }
 
     /// Sets the logical rotation used by the driver.
     pub fn set_rotation(&mut self, rotation: Rotation) {
-        self.rotation = rotation;
+        self.set_orientation(rotation);
     }
 
     /// Releases the display bus and control pins.
@@ -292,10 +316,7 @@ where
         self.fill_solid(
             &Rectangle::new(
                 Point::zero(),
-                Size::new(
-                    u32::from(self.panel.geometry.width),
-                    u32::from(self.panel.geometry.height),
-                ),
+                Size::new(self.logical_size().width, self.logical_size().height),
             ),
             color,
         )
@@ -337,7 +358,7 @@ where
             return Ok(());
         }
 
-        if clipped == *area {
+        if self.orientation == DisplayOrientation::Portrait && clipped == *area {
             self.set_address_window(&clipped)?;
             self.write_color_stream(
                 pixels,
@@ -358,7 +379,7 @@ where
         let style = MonoTextStyle::new(&FONT_6X10, color);
         Text::with_alignment(
             text,
-            Point::new(i32::from(self.panel.geometry.width) / 2, y),
+            Point::new(self.logical_size().width as i32 / 2, y),
             style,
             Alignment::Center,
         )
@@ -379,6 +400,45 @@ where
 
     fn flush_run(&mut self, run: PixelRun) -> Result<(), DisplayError<SpiError, PinError>> {
         self.fill_solid(&run.rectangle(), run.color)
+    }
+
+    fn logical_size(&self) -> Size {
+        let geometry = self.panel.geometry;
+        match self.orientation {
+            DisplayOrientation::Portrait | DisplayOrientation::PortraitInverted => {
+                Size::new(u32::from(geometry.width), u32::from(geometry.height))
+            }
+            DisplayOrientation::LandscapeClockwise
+            | DisplayOrientation::LandscapeCounterClockwise => {
+                Size::new(u32::from(geometry.height), u32::from(geometry.width))
+            }
+        }
+    }
+
+    fn map_rectangle_to_native(&self, area: &Rectangle) -> Rectangle {
+        let geometry = self.panel.geometry;
+        let native_width = i32::from(geometry.width);
+        let native_height = i32::from(geometry.height);
+        let x = area.top_left.x;
+        let y = area.top_left.y;
+        let width = area.size.width as i32;
+        let height = area.size.height as i32;
+
+        match self.orientation {
+            DisplayOrientation::Portrait => *area,
+            DisplayOrientation::PortraitInverted => Rectangle::new(
+                Point::new(native_width - x - width, native_height - y - height),
+                area.size,
+            ),
+            DisplayOrientation::LandscapeClockwise => Rectangle::new(
+                Point::new(y, native_height - x - width),
+                Size::new(area.size.height, area.size.width),
+            ),
+            DisplayOrientation::LandscapeCounterClockwise => Rectangle::new(
+                Point::new(native_width - y - height, x),
+                Size::new(area.size.height, area.size.width),
+            ),
+        }
     }
 
     fn set_address_window(
@@ -509,7 +569,8 @@ where
         if clipped.is_zero_sized() {
             return Ok(());
         }
-        self.set_address_window(&clipped)?;
+        let native = self.map_rectangle_to_native(&clipped);
+        self.set_address_window(&native)?;
         self.write_repeated_color(
             color,
             clipped.size.width.saturating_mul(clipped.size.height) as usize,
@@ -525,7 +586,7 @@ where
             return Ok(());
         }
 
-        if clipped == *area {
+        if self.orientation == DisplayOrientation::Portrait && clipped == *area {
             self.set_address_window(&clipped)?;
             return self.write_color_stream(
                 colors,
@@ -573,10 +634,16 @@ where
 
 impl<SPI, DC, RST, BL> OriginDimensions for Display<SPI, DC, RST, BL> {
     fn size(&self) -> Size {
-        Size::new(
-            u32::from(self.panel.geometry.width),
-            u32::from(self.panel.geometry.height),
-        )
+        let geometry = self.panel.geometry;
+        match self.orientation {
+            DisplayOrientation::Portrait | DisplayOrientation::PortraitInverted => {
+                Size::new(u32::from(geometry.width), u32::from(geometry.height))
+            }
+            DisplayOrientation::LandscapeClockwise
+            | DisplayOrientation::LandscapeCounterClockwise => {
+                Size::new(u32::from(geometry.height), u32::from(geometry.width))
+            }
+        }
     }
 }
 

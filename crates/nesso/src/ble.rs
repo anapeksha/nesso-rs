@@ -4,8 +4,7 @@
 //! connector provided by `esp-radio`. A BLE host stack can build GATT,
 //! notification, and advertising behavior on top of that connector.
 
-use crate::bsp::RadioRuntimeResources;
-use esp_hal::{interrupt::software::SoftwareInterruptControl, timer::timg::TimerGroup};
+use crate::{bsp::RadioRuntimeResources, runtime};
 use esp_radio::ble::{Config, controller::BleConnector};
 use heapless::{String, Vec};
 
@@ -50,6 +49,7 @@ pub struct Ble {
     state: BleState,
     resources: Option<BluetoothResources>,
     runtime: Option<RadioRuntimeResources>,
+    runtime_started: bool,
     connector: Option<BleConnector<'static>>,
 }
 
@@ -61,6 +61,19 @@ impl Ble {
             state: BleState::Stopped,
             resources: Some(resources),
             runtime: Some(runtime),
+            runtime_started: false,
+            connector: None,
+        }
+    }
+
+    /// Creates a BLE wrapper when the shared ESP radio runtime is already running.
+    #[must_use]
+    pub const fn new_started(resources: BluetoothResources) -> Self {
+        Self {
+            state: BleState::Stopped,
+            resources: Some(resources),
+            runtime: None,
+            runtime_started: true,
             connector: None,
         }
     }
@@ -93,10 +106,11 @@ impl Ble {
                 .resources
                 .take()
                 .ok_or(BleError::ResourcesUnavailable)?;
-            let runtime = self.runtime.take().ok_or(BleError::ResourcesUnavailable)?;
-            let timg0 = TimerGroup::new(runtime.timer_group0);
-            let sw_interrupt = SoftwareInterruptControl::new(runtime.software_interrupt);
-            esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
+            if !self.runtime_started {
+                let runtime = self.runtime.take().ok_or(BleError::ResourcesUnavailable)?;
+                runtime::start_radio_runtime(runtime);
+                self.runtime_started = true;
+            }
 
             let connector =
                 BleConnector::new(resources.bluetooth, config).map_err(|_| BleError::Init)?;

@@ -2,7 +2,7 @@
 #![no_main]
 
 use esp_backtrace as _;
-use esp_hal::{clock::CpuClock, delay::Delay, main};
+use esp_hal::{clock::CpuClock, delay::Delay, main, time::Instant};
 use nesso::{Nesso, audio::Tone};
 
 esp_bootloader_esp_idf::esp_app_desc!();
@@ -11,16 +11,27 @@ esp_bootloader_esp_idf::esp_app_desc!();
 fn main() -> ! {
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
-    let mut delay = Delay::new();
+    let delay = Delay::new();
     let mut nesso = match Nesso::new(peripherals) {
         Ok(nesso) => nesso,
         Err(_) => abort(),
     };
-    let tone = Tone::new(Tone::DEFAULT_BUZZER_HZ, 250);
+    let tone = Tone::new(Tone::DEFAULT_BUZZER_HZ, 60);
+    let mut next_tone_at_us = 0u64;
 
     loop {
-        let _ = nesso.audio.play_blocking(tone, &mut delay);
-        delay.delay_millis(750);
+        let now_us = Instant::now().duration_since_epoch().as_micros();
+        if now_us >= next_tone_at_us && !nesso.audio.is_busy() {
+            if nesso.audio.enqueue(tone).is_err() {
+                abort()
+            }
+            next_tone_at_us = now_us.saturating_add(700_000);
+        }
+
+        if nesso.audio.poll(now_us).is_err() {
+            abort()
+        }
+        delay.delay_millis(1);
     }
 }
 

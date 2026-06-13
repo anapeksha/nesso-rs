@@ -25,6 +25,8 @@ surface:
   phone-visible GATT, passive scanning, and notification mirroring validation.
 - Storage uses fixed-capacity `heapless` data structures and an optional
   `esp-storage` flash adapter with a documented SDK settings partition.
+- `nesso::runtime` centralizes ESP radio runtime startup so async applications
+  can start Wi-Fi/BLE ordering explicitly without duplicating board wiring.
 
 ## Initialization Model
 
@@ -43,6 +45,11 @@ only need display/audio do not fail on IMU bring-up. Touch, IMU, and power are
 exposed through facade methods because they share the board I2C bus. This keeps
 ownership visible and avoids global mutable state.
 
+Applications using Wi-Fi or BLE from async tasks can call
+`Nesso::start_async_runtime` once before creating radio controllers. The facade
+then constructs Wi-Fi and BLE wrappers that reuse the already-started runtime.
+Simple examples may continue to let Wi-Fi or BLE start the runtime lazily.
+
 ## Display Model
 
 `nesso::display` targets ST7789P3 and exposes:
@@ -54,17 +61,20 @@ ownership visible and avoids global mutable state.
 - backlight abstraction,
 - clear/fill operations,
 - centered text rendering,
+- logical display orientation,
+- orientation-aware fills and blits,
 - `embedded-graphics` integration.
 
 The command transport is generic over `embedded-hal` SPI and output-pin traits.
 Panel offsets and color inversion are explicit configuration fields because the
 Nesso N1 ST7789 visible area is offset inside display memory.
 
-`nesso::sprite` adds caller-owned RGB565 framebuffers so applications can render
-off-screen without a global heap. `nesso::ui` adds small layout, text,
-progress-bar, and integer-transition helpers that work with any
-`embedded-graphics` target. The SDK keeps these primitives generic and avoids an
-application screen/router framework.
+`nesso::sprite` adds caller-owned RGB565 framebuffers, dirty-region lists, and
+region iterators so applications can render off-screen without a global heap and
+copy only changed areas. `nesso::ui` adds small layout, text, progress-bar,
+shape, and integer-transition helpers that work with any `embedded-graphics`
+target. The SDK keeps these primitives generic and avoids an application
+screen/router framework.
 
 ## Event Model
 
@@ -75,8 +85,9 @@ with a distinct event type for press, release, move, and idle.
 ## Async Model
 
 Wi-Fi is the SDK layer that needs Embassy-style async behavior. `nesso::wifi`
-is gated behind the `wifi` feature, owns the Nesso N1 radio resources, starts
-the ESP radio runtime, and exposes `scan_async`, `connect_async`,
+is gated behind the `wifi` feature, owns the Nesso N1 radio resources, can
+reuse an explicitly started radio runtime, and exposes `scan_async`,
+`connect_async`,
 `ensure_connected_async`, and `disconnect_async` for applications already
 running an Embassy executor. The same module also provides blocking convenience
 wrappers for small examples by using `embassy-futures::block_on` internally.
