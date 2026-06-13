@@ -9,10 +9,15 @@
 
 extern crate alloc;
 
-use alloc::{string::String as AllocString, vec::Vec as AllocVec};
+#[cfg(not(any(test, nesso_host_tests)))]
+use alloc::string::String as AllocString;
+use alloc::vec::Vec as AllocVec;
 
+#[cfg(not(any(test, nesso_host_tests)))]
 use crate::{bsp::RadioRuntimeResources, runtime};
+#[cfg(not(any(test, nesso_host_tests)))]
 use embassy_futures::block_on;
+#[cfg(not(any(test, nesso_host_tests)))]
 use esp_radio::wifi::{
     AuthenticationMethod, Config, WifiController, ap::AccessPointInfo, scan::ScanConfig,
     sta::StationConfig,
@@ -20,9 +25,11 @@ use esp_radio::wifi::{
 use heapless::String;
 
 /// ESP radio station network interface used by `embassy-net`.
+#[cfg(not(any(test, nesso_host_tests)))]
 pub type StationInterface = esp_radio::wifi::Interface<'static>;
 
 /// ESP radio network interfaces created during Wi-Fi initialization.
+#[cfg(not(any(test, nesso_host_tests)))]
 pub type NetworkInterfaces = esp_radio::wifi::Interfaces<'static>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -50,6 +57,21 @@ pub struct AccessPoint {
     pub channel: u8,
     /// Advertised authentication method.
     pub auth: AuthMethod,
+}
+
+/// Information about the current station association.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConnectedAccessPoint {
+    /// Connected network SSID.
+    pub ssid: String<32>,
+    /// Access point BSSID.
+    pub bssid: [u8; 6],
+    /// Wi-Fi channel.
+    pub channel: u8,
+    /// Authentication method.
+    pub auth: AuthMethod,
+    /// Association identifier assigned by the access point.
+    pub aid: u16,
 }
 
 /// Heap-backed scan result list returned by ESP radio station scans.
@@ -116,6 +138,7 @@ pub enum WifiState {
 }
 
 /// Async station interface exposed by Wi-Fi implementations.
+#[cfg(not(any(test, nesso_host_tests)))]
 pub trait WifiStation {
     /// Driver-specific error type.
     type Error;
@@ -165,12 +188,14 @@ pub enum EspRadioWifiError {
 }
 
 /// Board-owned peripherals required to start ESP radio Wi-Fi.
+#[cfg(not(any(test, nesso_host_tests)))]
 pub struct RadioResources {
     /// ESP32-C6 Wi-Fi peripheral.
     pub wifi: esp_hal::peripherals::WIFI<'static>,
 }
 
 /// Stateful Wi-Fi station wrapper for Nesso N1.
+#[cfg(not(any(test, nesso_host_tests)))]
 pub struct EspRadioWifi {
     state: WifiState,
     resources: Option<RadioResources>,
@@ -178,8 +203,10 @@ pub struct EspRadioWifi {
     runtime_started: bool,
     controller: Option<WifiController<'static>>,
     interfaces: Option<NetworkInterfaces>,
+    connected: Option<ConnectedAccessPoint>,
 }
 
+#[cfg(not(any(test, nesso_host_tests)))]
 impl EspRadioWifi {
     /// Creates a Wi-Fi wrapper from board-owned radio resources.
     #[must_use]
@@ -191,6 +218,7 @@ impl EspRadioWifi {
             runtime_started: false,
             controller: None,
             interfaces: None,
+            connected: None,
         }
     }
 
@@ -204,6 +232,7 @@ impl EspRadioWifi {
             runtime_started: true,
             controller: None,
             interfaces: None,
+            connected: None,
         }
     }
 
@@ -303,11 +332,18 @@ impl EspRadioWifi {
             .map_err(|_| EspRadioWifiError::Configure)?;
 
         self.state = WifiState::Connecting;
-        controller.connect_async().await.map_err(|_| {
+        let info = controller.connect_async().await.map_err(|_| {
             self.state = WifiState::Stopped;
             EspRadioWifiError::Connect
         })?;
 
+        self.connected = Some(ConnectedAccessPoint {
+            ssid: copy_ssid(info.ssid.as_str()),
+            bssid: info.bssid,
+            channel: info.channel,
+            auth: convert_auth(info.authmode),
+            aid: info.aid,
+        });
         self.state = WifiState::Connected;
         Ok(())
     }
@@ -349,6 +385,7 @@ impl EspRadioWifi {
                 .map_err(|_| EspRadioWifiError::Disconnect)?;
         }
 
+        self.connected = None;
         self.state = WifiState::Stopped;
         Ok(())
     }
@@ -366,8 +403,24 @@ impl EspRadioWifi {
             .as_ref()
             .is_some_and(WifiController::is_connected)
     }
+
+    /// Returns information captured when the station connected.
+    #[must_use]
+    pub fn connection_info(&self) -> Option<&ConnectedAccessPoint> {
+        self.connected.as_ref()
+    }
+
+    /// Reads the current station RSSI in dBm.
+    pub fn rssi_dbm(&self) -> Result<i32, EspRadioWifiError> {
+        self.controller
+            .as_ref()
+            .ok_or(EspRadioWifiError::NotStarted)?
+            .rssi()
+            .map_err(|_| EspRadioWifiError::NotStarted)
+    }
 }
 
+#[cfg(not(any(test, nesso_host_tests)))]
 impl WifiStation for EspRadioWifi {
     type Error = EspRadioWifiError;
 
@@ -399,6 +452,7 @@ impl WifiStation for EspRadioWifi {
     }
 }
 
+#[cfg(not(any(test, nesso_host_tests)))]
 fn station_config(credentials: &Credentials) -> StationConfig {
     let mut config = StationConfig::default()
         .with_ssid(credentials.ssid.as_str())
@@ -411,6 +465,7 @@ fn station_config(credentials: &Credentials) -> StationConfig {
     config
 }
 
+#[cfg(not(any(test, nesso_host_tests)))]
 fn convert_access_points(aps: &[AccessPointInfo]) -> AccessPoints {
     let mut out = AllocVec::new();
     for ap in aps {
@@ -426,6 +481,14 @@ fn convert_access_points(aps: &[AccessPointInfo]) -> AccessPoints {
     out
 }
 
+#[cfg(not(any(test, nesso_host_tests)))]
+fn copy_ssid(ssid: &str) -> String<32> {
+    let mut out = String::new();
+    let _ = out.push_str(ssid);
+    out
+}
+
+#[cfg(not(any(test, nesso_host_tests)))]
 fn convert_auth(auth: AuthenticationMethod) -> AuthMethod {
     match auth {
         AuthenticationMethod::None => AuthMethod::Open,

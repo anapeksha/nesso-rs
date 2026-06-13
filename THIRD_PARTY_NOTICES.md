@@ -5,7 +5,7 @@ upstream references. This file records notices that apply to the repository.
 
 ## Bosch Sensortec BME68x SensorAPI
 
-`nesso-env` contains BME68x register sequencing and compensation logic derived
+`nesso::env` contains BME68x register sequencing and compensation logic derived
 from Bosch Sensortec's official BME68x SensorAPI.
 
 Source: <https://github.com/boschsensortec/BME68x_SensorAPI>

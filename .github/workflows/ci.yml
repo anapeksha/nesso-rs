@@ -47,6 +47,13 @@ jobs:
       - name: Check all features
         run: cargo check --workspace --all-features
 
+      - name: Host tests
+        shell: bash
+        run: |
+          HOST_TARGET="$(rustc -vV | sed -n 's/^host: //p')"
+          RUSTFLAGS="--cfg nesso_host_tests" \
+            cargo test --manifest-path tests/host/Cargo.toml --target "${HOST_TARGET}"
+
       - name: Build
         run: cargo build --workspace
 

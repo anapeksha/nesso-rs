@@ -4,11 +4,14 @@
 //! connector provided by `esp-radio`. A BLE host stack can build GATT,
 //! notification, and advertising behavior on top of that connector.
 
+#[cfg(not(any(test, nesso_host_tests)))]
 use crate::{bsp::RadioRuntimeResources, runtime};
+#[cfg(not(any(test, nesso_host_tests)))]
 use esp_radio::ble::{Config, controller::BleConnector};
 use heapless::{String, Vec};
 
 /// Board-owned peripherals required to start the BLE controller.
+#[cfg(not(any(test, nesso_host_tests)))]
 pub struct BluetoothResources {
     /// ESP32-C6 Bluetooth controller peripheral.
     pub bluetooth: esp_hal::peripherals::BT<'static>,
@@ -45,6 +48,7 @@ pub enum BleError {
 }
 
 /// Nesso-owned BLE controller lifecycle wrapper.
+#[cfg(not(any(test, nesso_host_tests)))]
 pub struct Ble {
     state: BleState,
     resources: Option<BluetoothResources>,
@@ -53,6 +57,7 @@ pub struct Ble {
     connector: Option<BleConnector<'static>>,
 }
 
+#[cfg(not(any(test, nesso_host_tests)))]
 impl Ble {
     /// Creates a stopped BLE wrapper from board-owned resources.
     #[must_use]

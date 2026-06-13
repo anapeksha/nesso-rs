@@ -31,6 +31,29 @@ pub struct BatteryStatus {
     pub charge: ChargeStatus,
 }
 
+impl BatteryStatus {
+    /// Returns true when battery percentage is at or below `threshold_percent`.
+    #[must_use]
+    pub const fn is_low(&self, threshold_percent: u8) -> bool {
+        self.percentage <= threshold_percent
+    }
+
+    /// Returns true when the charger reports an active charging/full state.
+    #[must_use]
+    pub const fn has_external_power(&self) -> bool {
+        matches!(self.charge, ChargeStatus::Charging | ChargeStatus::Full)
+    }
+
+    /// Returns a compact power state inferred from charger status.
+    #[must_use]
+    pub const fn power_state(&self) -> PowerState {
+        match self.charge {
+            ChargeStatus::Charging | ChargeStatus::Full => PowerState::Usb,
+            ChargeStatus::Discharging | ChargeStatus::Unknown => PowerState::Battery,
+        }
+    }
+}
+
 pub struct Power<I2C> {
     i2c: I2C,
     fuel_gauge_address: u8,
@@ -84,6 +107,11 @@ where
             return Ok(0);
         }
         Ok(((remaining * 100) / full).min(100) as u8)
+    }
+
+    /// Returns true when battery percentage is at or below `threshold_percent`.
+    pub fn is_low_battery(&mut self, threshold_percent: u8) -> Result<bool, E> {
+        Ok(self.battery_percentage()? <= threshold_percent)
     }
 
     /// Reads charger state from the AW32001 status register.

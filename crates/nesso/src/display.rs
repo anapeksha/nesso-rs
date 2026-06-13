@@ -241,13 +241,14 @@ impl<SPI, DC, RST, BL> Display<SPI, DC, RST, BL> {
     /// All `DrawTarget`, text, fill, and blit coordinates are interpreted in
     /// this logical orientation and clipped before they are mapped to the
     /// native panel memory coordinates.
-    pub fn set_orientation(&mut self, orientation: DisplayOrientation) {
+    pub fn set_orientation(&mut self, orientation: DisplayOrientation) -> Result<(), Infallible> {
         self.orientation = orientation;
+        Ok(())
     }
 
     /// Sets the logical rotation used by the driver.
-    pub fn set_rotation(&mut self, rotation: Rotation) {
-        self.set_orientation(rotation);
+    pub fn set_rotation(&mut self, rotation: Rotation) -> Result<(), Infallible> {
+        self.set_orientation(rotation)
     }
 
     /// Releases the display bus and control pins.

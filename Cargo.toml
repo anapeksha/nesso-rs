@@ -4,7 +4,10 @@ members = [
     "crates/nesso",
     "examples/hello_world",
     "examples/display_test",
+    "examples/display_orientation",
+    "examples/dirty_regions",
     "examples/touch_test",
+    "examples/input_events",
     "examples/input_test",
     "examples/imu_test",
     "examples/env_pro_test",
@@ -12,13 +15,18 @@ members = [
     "examples/wifi_net_stack",
     "examples/board_info",
     "examples/audio_test",
+    "examples/queued_audio",
     "examples/battery_test",
+    "examples/power_status",
     "examples/storage_test",
+    "examples/storage_settings",
     "examples/motion_test",
+    "examples/motion_status",
     "examples/ui_test",
     "examples/ble_peripheral",
     "examples/ble_beacon",
     "examples/ble_notifications",
+    "examples/ble_notification_mirror",
 ]
 
 [workspace.package]
@@ -89,6 +97,7 @@ trouble-host = { version = "0.6.0", default-features = false, features = [
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(nesso_host_tests)'] }
 
 [workspace.lints.clippy]
 large_stack_frames = "deny"

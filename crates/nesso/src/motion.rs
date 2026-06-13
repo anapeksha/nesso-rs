@@ -47,6 +47,17 @@ pub enum MotionState {
     Moving,
 }
 
+/// Coarse orientation family inferred from pose.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OrientationKind {
+    /// Display plane is approximately horizontal.
+    Flat,
+    /// Board is closer to portrait than landscape.
+    Portrait,
+    /// Board is closer to landscape than portrait.
+    Landscape,
+}
+
 /// Combined motion context returned by [`MotionDetector`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MotionContext {
@@ -188,5 +199,15 @@ pub const fn pose_from_gravity(direction: GravityDirection) -> Pose {
         GravityDirection::NegativeY => Pose::PortraitDown,
         GravityDirection::PositiveX => Pose::LandscapeRight,
         GravityDirection::NegativeX => Pose::LandscapeLeft,
+    }
+}
+
+/// Converts a pose into a coarse orientation family.
+#[must_use]
+pub const fn orientation_kind(pose: Pose) -> OrientationKind {
+    match pose {
+        Pose::FaceUp | Pose::FaceDown => OrientationKind::Flat,
+        Pose::PortraitUp | Pose::PortraitDown => OrientationKind::Portrait,
+        Pose::LandscapeLeft | Pose::LandscapeRight => OrientationKind::Landscape,
     }
 }

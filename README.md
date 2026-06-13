@@ -1,6 +1,6 @@
-# nesso-rs
+# nesso
 
-`nesso-rs` is a Rust-native SDK for the Arduino Nesso N1, an ESP32-C6 based
+`nesso` is a Rust-native SDK for the Arduino Nesso N1, an ESP32-C6 based
 device with display, touch, IMU, Wi-Fi, audio, and battery/power-management
 hardware and optional external unit support for Nesso-compatible expansion
 sensors such as M5Stack Unit ENV Pro.
@@ -21,6 +21,7 @@ Validated examples currently cover:
 
 - ST7789P3 display initialization, orientation, text rendering, and partial
   sprite updates
+- orientation-aware touch mapping and generic input event helpers
 - FT6336U touch reads
 - BMI270 IMU live axis reads
 - KEY1/KEY2 button events
@@ -78,7 +79,7 @@ cargo add esp-alloc
 - `nesso::runtime`: explicit ESP radio runtime startup helpers for Wi-Fi/BLE
   async applications.
 - `nesso::touch`: FT6336U touch controller support.
-- `nesso::input`: button event state machine helpers.
+- `nesso::input`: button event and touch gesture state machine helpers.
 - `nesso::imu`: BMI270 initialization, config upload, and sensor reads.
 - `nesso::motion`: coarse motion and pose helpers built from accelerometer
   samples.
@@ -97,23 +98,24 @@ cargo add esp-alloc
 
 ## Examples
 
-Each public module has one focused hardware or module-validation example:
+Public modules have focused hardware or module-validation examples:
 
 | Module | Example |
 | --- | --- |
 | `nesso::Nesso` | `hello_world` |
 | `nesso::bsp` | `board_info` |
-| `nesso::display` | `display_test` |
+| `nesso::display` | `display_test`, `display_orientation` |
 | `nesso::touch` | `touch_test` |
-| `nesso::input` | `input_test` |
+| `nesso::input` | `input_test`, `input_events` |
 | `nesso::imu` | `imu_test` |
-| `nesso::motion` | `motion_test` |
-| `nesso::audio` | `audio_test` |
-| `nesso::power` | `battery_test` |
+| `nesso::motion` | `motion_test`, `motion_status` |
+| `nesso::audio` | `audio_test`, `queued_audio` |
+| `nesso::power` | `battery_test`, `power_status` |
 | `nesso::wifi` | `wifi_scan`, `wifi_net_stack` |
-| `nesso::ble` | `ble_peripheral`, `ble_beacon`, `ble_notifications` |
-| `nesso::storage` | `storage_test` |
+| `nesso::ble` | `ble_peripheral`, `ble_beacon`, `ble_notifications`, `ble_notification_mirror` |
+| `nesso::storage` | `storage_test`, `storage_settings` |
 | `nesso::ui` | `ui_test` |
+| `nesso::sprite` | `dirty_regions` |
 | `nesso::env` | `env_pro_test` |
 
 ## Example
@@ -184,11 +186,20 @@ Install Rust with the target specified in `rust-toolchain.toml`, then run:
 ```bash
 cargo metadata --no-deps --format-version 1
 cargo fmt --check --all
-cargo clippy --workspace --all-targets -- -D warnings
-cargo check --workspace
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo check --workspace --all-features
+HOST_TARGET="$(rustc -vV | sed -n 's/^host: //p')"
+RUSTFLAGS="--cfg nesso_host_tests" \
+  cargo test --manifest-path tests/host/Cargo.toml --target "${HOST_TARGET}"
 cargo build --workspace
 cargo build --workspace --release
 ```
+
+The host test harness exercises reusable logic that does not require hardware:
+notification parsing, Wi-Fi credential validation, settings serialization and
+checksum handling, dirty-region coalescing, touch orientation mapping, input
+events, touch and power I2C parsing, queued audio behavior, motion
+classification, power helpers, and generic graphics helpers.
 
 ## Flashing Examples
 

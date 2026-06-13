@@ -52,6 +52,9 @@ jobs:
           cargo clippy --workspace --all-targets -- -D warnings
           cargo check --workspace
           cargo check --workspace --all-features
+          HOST_TARGET="$(rustc -vV | sed -n 's/^host: //p')"
+          RUSTFLAGS="--cfg nesso_host_tests" \
+            cargo test --manifest-path tests/host/Cargo.toml --target "${HOST_TARGET}"
           cargo build --workspace --release
           cargo +nightly rustdoc -p nesso --lib \
             -Zbuild-std=core,alloc \

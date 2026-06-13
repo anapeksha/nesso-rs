@@ -72,9 +72,9 @@ runtime partition table.
 Implemented: typed ESP32-C6 radio resources, explicit shared radio runtime
 startup through `Nesso::start_async_runtime`, `esp-radio`
 scan/connect/disconnect support, validated credentials, facade-owned Wi-Fi
-state, async station APIs with blocking convenience wrappers for simple
-examples, and a one-time `NetworkInterfaces` handoff for application-owned
-`embassy-net` stacks. The `wifi_scan` example can optionally connect when
+state, typed connection snapshots, RSSI reads, async station APIs with blocking
+convenience wrappers for simple examples, and a one-time `NetworkInterfaces`
+handoff for application-owned `embassy-net` stacks. The `wifi_scan` example can optionally connect when
 `NESSO_WIFI_SSID` and `NESSO_WIFI_PASSWORD` are provided at compile time. The
 `wifi_net_stack` example starts the runtime explicitly, connects, takes the
 SDK-created interfaces, and creates an `embassy-net` stack from
@@ -120,11 +120,12 @@ inventing derived air-quality values.
 
 ## Motion and UI
 
-Implemented: motion helper module for coarse pose, dominant gravity, and
-still/moving context classification; caller-owned RGB565 sprites; display
-orientation; dirty-region primitives; sprite region iterators; and
-draw-target-agnostic UI helpers for labels, progress bars, layout rows, filled
-pills, filled sectors, and integer transitions.
+Implemented: motion helper module for coarse pose, orientation kind, dominant
+gravity, and still/moving context classification; caller-owned RGB565 sprites;
+display orientation; orientation-aware touch mapping; coalescing dirty-region
+primitives; sprite region iterators; and draw-target-agnostic UI helpers for
+labels, progress bars, layout rows, filled rounded rectangles, circles, lines,
+arcs, filled sectors, and integer transitions.
 
 Remaining gap: no app-level view router is included. The SDK intentionally
 provides reusable primitives rather than application/business workflow screens.

@@ -1,0 +1,21 @@
+[package]
+name = "queued_audio"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version = "0.0.0"
+
+[dependencies]
+esp-backtrace.workspace = true
+esp-bootloader-esp-idf.workspace = true
+esp-hal.workspace = true
+nesso = { path = "../../crates/nesso" }
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "queued_audio"
+path = "src/main.rs"
+test = false
+bench = false
