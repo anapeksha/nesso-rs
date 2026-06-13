@@ -70,10 +70,13 @@ runtime partition table.
 ## Wi-Fi
 
 Implemented: typed ESP32-C6 radio resources, `esp-radio` scan/connect/disconnect
-support, validated credentials, facade-owned Wi-Fi state, and async station APIs
-with blocking convenience wrappers for simple examples. The `wifi_scan` example
-can optionally connect when `NESSO_WIFI_SSID` and `NESSO_WIFI_PASSWORD` are
-provided at compile time.
+support, validated credentials, facade-owned Wi-Fi state, async station APIs
+with blocking convenience wrappers for simple examples, and a one-time
+`NetworkInterfaces` handoff for application-owned `embassy-net` stacks. The
+`wifi_scan` example can optionally connect when `NESSO_WIFI_SSID` and
+`NESSO_WIFI_PASSWORD` are provided at compile time. The `wifi_net_stack` example
+connects, takes the SDK-created interfaces, and creates an `embassy-net` stack
+from `interfaces.station`.
 
 Remaining gap: TCP/IP sockets and application protocols are intentionally not
 wrapped by the SDK. The SDK boundary is board Wi-Fi lifecycle.

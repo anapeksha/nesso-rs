@@ -26,7 +26,8 @@ Validated examples currently cover:
 - Passive buzzer tone output
 - BQ27220/AW32001 battery and charger status reads
 - Heapless settings storage
-- ESP32-C6 Wi-Fi scan/connect/disconnect lifecycle using `esp-radio`
+- ESP32-C6 Wi-Fi scan/connect/disconnect lifecycle and `embassy-net`
+  interface handoff using `esp-radio`
 - ESP32-C6 BLE controller lifecycle with a connectable GATT peripheral example
   and notification-mirroring GATT surface
 - Motion/context helpers derived from BMI270 acceleration samples
@@ -80,8 +81,9 @@ cargo add esp-alloc
   samples.
 - `nesso::audio`: passive buzzer output and blocking tone generation.
 - `nesso::power`: BQ27220 fuel gauge and AW32001 charger status support.
-- `nesso::wifi`: ESP32-C6 Wi-Fi station lifecycle support, gated behind the
-  `wifi` feature.
+- `nesso::wifi`: ESP32-C6 Wi-Fi station lifecycle support and network interface
+  handoff for application-owned network stacks, gated behind the `wifi`
+  feature.
 - `nesso::storage`: heapless settings storage primitives and
   `esp-storage` flash-backed persistence.
 - `nesso::sprite`: caller-owned RGB565 sprite/framebuffer support for
@@ -104,7 +106,7 @@ Each public module has one focused hardware or module-validation example:
 | `nesso::motion` | `motion_test` |
 | `nesso::audio` | `audio_test` |
 | `nesso::power` | `battery_test` |
-| `nesso::wifi` | `wifi_scan` |
+| `nesso::wifi` | `wifi_scan`, `wifi_net_stack` |
 | `nesso::ble` | `ble_peripheral`, `ble_beacon`, `ble_notifications` |
 | `nesso::storage` | `storage_test` |
 | `nesso::ui` | `ui_test` |
@@ -154,6 +156,10 @@ See `examples/` for hardware-focused examples.
 Wi-Fi is behind the optional `wifi` feature and is initialized lazily with
 `nesso.init_wifi()`. Only applications that enable Wi-Fi need to compile
 `esp-radio`/`esp-rtos` and provide an `esp_alloc` heap for the ESP radio stack.
+Applications that need TCP/IP create their own `embassy-net` stack by calling
+`wifi.take_interfaces()` and passing `interfaces.station` to `embassy-net`.
+The SDK continues to own station control through the same `EspRadioWifi` value.
+HTTP, NTP, DNS, weather APIs, and other protocols belong in application crates.
 
 BLE is behind the optional `ble` feature and is initialized lazily with
 `nesso.init_ble()`. The SDK owns board/controller bring-up and can hand the HCI

@@ -2,7 +2,10 @@
 //!
 //! The BSP owns the low-level radio peripherals and passes them into this
 //! crate. Applications can use async station methods directly or the blocking
-//! convenience wrappers for small examples.
+//! convenience wrappers for small examples. Applications that need TCP/IP can
+//! take the SDK-created network interfaces and pass `interfaces.station` into
+//! an `embassy-net` stack while keeping [`EspRadioWifi`] for station
+//! scan/connect/disconnect control.
 
 extern crate alloc;
 
@@ -16,6 +19,12 @@ use esp_radio::wifi::{
     sta::StationConfig,
 };
 use heapless::String;
+
+/// ESP radio station network interface used by `embassy-net`.
+pub type StationInterface = esp_radio::wifi::Interface<'static>;
+
+/// ESP radio network interfaces created during Wi-Fi initialization.
+pub type NetworkInterfaces = esp_radio::wifi::Interfaces<'static>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AuthMethod {
@@ -152,6 +161,8 @@ pub enum EspRadioWifiError {
     Connect,
     /// Station disconnect failed.
     Disconnect,
+    /// Network interfaces were already handed to the application.
+    InterfacesTaken,
 }
 
 /// Board-owned peripherals required to start ESP radio Wi-Fi.
@@ -166,6 +177,7 @@ pub struct EspRadioWifi {
     resources: Option<RadioResources>,
     runtime: Option<RadioRuntimeResources>,
     controller: Option<WifiController<'static>>,
+    interfaces: Option<NetworkInterfaces>,
 }
 
 impl EspRadioWifi {
@@ -177,6 +189,7 @@ impl EspRadioWifi {
             resources: Some(resources),
             runtime: Some(runtime),
             controller: None,
+            interfaces: None,
         }
     }
 
@@ -203,12 +216,28 @@ impl EspRadioWifi {
         let sw_interrupt = SoftwareInterruptControl::new(runtime.software_interrupt);
         esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
 
-        let (controller, _interfaces) = esp_radio::wifi::new(resources.wifi, Default::default())
+        let (controller, interfaces) = esp_radio::wifi::new(resources.wifi, Default::default())
             .map_err(|_| EspRadioWifiError::Init)?;
 
         self.controller = Some(controller);
+        self.interfaces = Some(interfaces);
         self.state = WifiState::Stopped;
         Ok(())
+    }
+
+    /// Returns the SDK-created ESP radio network interfaces exactly once.
+    ///
+    /// Applications can pass `interfaces.station` to `embassy-net` while
+    /// continuing to use this [`EspRadioWifi`] value for station lifecycle
+    /// control such as scan, connect, ensure-connected, and disconnect.
+    ///
+    /// This method starts Wi-Fi if needed. Calling it more than once returns
+    /// [`EspRadioWifiError::InterfacesTaken`].
+    pub fn take_interfaces(&mut self) -> Result<NetworkInterfaces, EspRadioWifiError> {
+        self.start()?;
+        self.interfaces
+            .take()
+            .ok_or(EspRadioWifiError::InterfacesTaken)
     }
 
     /// Blocking convenience wrapper around [`Self::scan_async`].

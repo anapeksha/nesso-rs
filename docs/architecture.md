@@ -18,8 +18,8 @@ surface:
 - Device drivers use `embedded-hal` and `embedded-hal-async` traits so esp-hal
   peripheral instances can be passed without global singletons.
 - Graphics support is provided through `embedded-graphics::DrawTarget`.
-- Wi-Fi exposes typed radio resources and a station lifecycle API using
-  `esp-radio`.
+- Wi-Fi exposes typed radio resources, a station lifecycle API, and a one-time
+  station network-interface handoff using `esp-radio`.
 - BLE exposes the ESP32-C6 HCI connector lifecycle using `esp-radio`, with
   fixed-capacity beacon scheduling types and Trouble-based examples for
   phone-visible GATT, passive scanning, and notification mirroring validation.
@@ -80,6 +80,10 @@ the ESP radio runtime, and exposes `scan_async`, `connect_async`,
 `ensure_connected_async`, and `disconnect_async` for applications already
 running an Embassy executor. The same module also provides blocking convenience
 wrappers for small examples by using `embassy-futures::block_on` internally.
+Applications that need TCP/IP call `EspRadioWifi::take_interfaces()` and pass
+`interfaces.station` into their own `embassy-net` stack. The SDK keeps the
+controller for scan/connect/disconnect and does not own HTTP, NTP, DNS, weather
+clients, or other application protocols.
 
 BLE is gated behind the `ble` feature. The current Rust ESP radio stack exposes
 BLE as an HCI connector, so the SDK owns controller initialization and provides

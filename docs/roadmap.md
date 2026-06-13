@@ -21,13 +21,15 @@
     offset support for custom flash maps.
 11. Add wrapped text rendering, BLE notification wire helpers, and checksummed
     settings persistence.
+12. Add Wi-Fi station network-interface handoff for application-owned
+    `embassy-net` stacks.
 
 ## Later
 
 1. Promote more BLE host helpers into the SDK API after the Trouble/ESP32-C6 host
    integration surface is stable enough to commit to semver.
-2. Add higher-level Wi-Fi network/socket lifecycle helpers only if they can stay
-   board-lifecycle focused and executor-neutral.
+2. Keep TCP/IP protocols, HTTP, NTP, DNS, and weather clients in application
+   crates unless a future helper remains strictly board-lifecycle focused.
 3. Add partition-table lookup when the ESP Rust storage stack exposes a stable
    named-partition API.
 4. Add LoRa support for SX1262 after the core SDK stabilizes.
