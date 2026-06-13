@@ -88,6 +88,7 @@ fn scan_and_render(nesso: &mut Nesso) -> bool {
                 EspRadioWifiError::Scan => "scan failed",
                 EspRadioWifiError::Connect => "connect failed",
                 EspRadioWifiError::Disconnect => "disconnect failed",
+                EspRadioWifiError::InterfacesTaken => "net taken",
             };
             render_wifi_error(&mut nesso.display, detail)
         }
