@@ -82,4 +82,4 @@ jobs:
             -- -D warnings
 
       - name: Publish dry-run
-        run: cargo publish -p nesso --dry-run --allow-dirty
+        run: cargo publish -p nesso --dry-run --allow-dirty --target riscv32imac-unknown-none-elf
