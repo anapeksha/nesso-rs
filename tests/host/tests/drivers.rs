@@ -114,6 +114,18 @@ impl I2cErrorType for FakeI2c {
     type Error = Infallible;
 }
 
+impl FakeI2c {
+    fn read_bq27220_byte(&self, command: u8) -> u8 {
+        match command {
+            0x08 | 0x09 => self.voltage_mv.to_le_bytes()[usize::from(command - 0x08)],
+            0x0c | 0x0d => self.current_ma.to_le_bytes()[usize::from(command - 0x0c)],
+            0x10 | 0x11 => self.remaining_capacity.to_le_bytes()[usize::from(command - 0x10)],
+            0x12 | 0x13 => self.full_capacity.to_le_bytes()[usize::from(command - 0x12)],
+            _ => 0,
+        }
+    }
+}
+
 impl I2c for FakeI2c {
     fn transaction(
         &mut self,
@@ -131,6 +143,7 @@ impl I2c for FakeI2c {
                 Operation::Read(bytes) => match (address, command, bytes.len()) {
                     (0x38, 0x02, 1) => bytes[0] = self.touch_count,
                     (0x38, 0x03, 4) => bytes.copy_from_slice(&self.touch_data),
+                    (0x55, _, 1) => bytes[0] = self.read_bq27220_byte(command),
                     (0x55, 0x08, 2) => bytes.copy_from_slice(&self.voltage_mv.to_le_bytes()),
                     (0x55, 0x0c, 2) => bytes.copy_from_slice(&self.current_ma.to_le_bytes()),
                     (0x55, 0x10, 2) => {

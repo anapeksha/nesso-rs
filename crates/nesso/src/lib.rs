@@ -57,6 +57,9 @@ pub mod env;
 pub mod imu;
 /// Button and input event helpers.
 pub mod input;
+/// LoRa support for the onboard SX1262 transceiver.
+#[cfg(feature = "lora")]
+pub mod lora;
 /// Motion classification helpers built on BMI270 accelerometer samples.
 pub mod motion;
 /// Battery, charger, and power-management support.
@@ -86,7 +89,9 @@ use crate::bsp::{
     BoardInitError, ButtonLevels, NessoBuzzer, NessoDisplay, NessoI2c, NessoN1, NessoN1Board,
 };
 use crate::imu::{Acceleration, Bmi270, Gyroscope};
-use crate::power::{BatteryStatus, Power};
+#[cfg(feature = "lora")]
+use crate::lora::NessoLora;
+use crate::power::{BatteryStatus, ChargingConfig, Power};
 use crate::storage::{EspFlashSettingsStore, SettingsPartition};
 use crate::touch::{Touch, TouchEvent, TouchState};
 #[cfg(feature = "wifi")]
@@ -121,6 +126,12 @@ pub enum NessoError {
     ImuNotInitialized,
     /// Button expander setup or read failed.
     Input,
+    /// LoRa resources have already been consumed.
+    #[cfg(feature = "lora")]
+    LoraUnavailable,
+    /// LoRa setup failed.
+    #[cfg(feature = "lora")]
+    Lora,
 }
 
 /// Board-owned Nesso N1 SDK.
@@ -143,6 +154,8 @@ pub struct Nesso {
     #[cfg(any(feature = "wifi", feature = "ble"))]
     radio_runtime_started: bool,
     flash: Option<esp_hal::peripherals::FLASH<'static>>,
+    #[cfg(feature = "lora")]
+    lora: Option<crate::bsp::LoraResources>,
     imu_initialized: bool,
     previous_touch: TouchState,
 }
@@ -166,6 +179,8 @@ impl Nesso {
             #[cfg(any(feature = "wifi", feature = "ble"))]
             radio_runtime_started: false,
             flash: Some(parts.flash),
+            #[cfg(feature = "lora")]
+            lora: Some(parts.lora),
             imu_initialized: false,
             previous_touch: TouchState::default(),
         };
@@ -235,6 +250,21 @@ impl Nesso {
     pub fn battery_status(&mut self) -> Result<BatteryStatus, NessoError> {
         Power::new(&mut self.i2c)
             .battery_status()
+            .map_err(|_| NessoError::Power)
+    }
+
+    /// Configures the AW32001 charger with the SDK default charging profile and
+    /// enables battery charging.
+    pub fn enable_battery_charging(&mut self) -> Result<(), NessoError> {
+        Power::new(&mut self.i2c)
+            .begin_charging()
+            .map_err(|_| NessoError::Power)
+    }
+
+    /// Configures and enables AW32001 battery charging.
+    pub fn configure_battery_charging(&mut self, config: ChargingConfig) -> Result<(), NessoError> {
+        Power::new(&mut self.i2c)
+            .configure_charging(config)
             .map_err(|_| NessoError::Power)
     }
 
@@ -325,5 +355,22 @@ impl Nesso {
     ) -> Result<EspFlashSettingsStore<'static>, NessoError> {
         let flash = self.flash.take().ok_or(NessoError::FlashUnavailable)?;
         Ok(EspFlashSettingsStore::from_flash(flash, offset))
+    }
+
+    /// Consumes the facade and returns the onboard SX1262 LoRa driver.
+    ///
+    /// This does not transmit and does not place the radio into TX mode. Attach
+    /// the external LoRa antenna before calling any transmit method.
+    ///
+    /// The current SDK display and LoRa paths share the documented SPI bus, so
+    /// this method consumes the facade and releases the display's SPI bus to the
+    /// LoRa driver.
+    #[cfg(feature = "lora")]
+    pub fn into_lora(self) -> Result<NessoLora, NessoError> {
+        let resources = self.lora.ok_or(NessoError::LoraUnavailable)?;
+        let (spi_device, _dc, _reset, _backlight) = self.display.release();
+        let (spi, _lcd_cs, _delay) = spi_device.release();
+        crate::bsp::NessoN1Board::configure_lora_from_parts(spi, self.i2c, resources)
+            .map_err(|_| NessoError::Lora)
     }
 }

@@ -189,6 +189,9 @@ pub type NessoDisplay =
     Display<LcdSpiDevice<NessoSpi, NessoOutput, Delay>, NessoOutput, NullOutputPin, NullOutputPin>;
 /// Concrete passive-buzzer type returned by the board support package.
 pub type NessoBuzzer = Buzzer<NessoOutput>;
+/// Concrete LoRa SPI-device type used by the onboard SX1262 driver.
+#[cfg(feature = "lora")]
+pub type NessoLoraSpiDevice = LcdSpiDevice<NessoSpi, NessoOutput, Delay>;
 /// Board-owned radio resources required by `nesso::wifi`.
 #[cfg(feature = "wifi")]
 pub type WifiResources = crate::wifi::RadioResources;
@@ -224,6 +227,20 @@ pub struct NessoCoreParts {
     pub radio_runtime: RadioRuntimeResources,
     /// Flash peripheral for application storage.
     pub flash: esp_hal::peripherals::FLASH<'static>,
+    /// Onboard SX1262 LoRa resources.
+    #[cfg(feature = "lora")]
+    pub lora: LoraResources,
+}
+
+/// Board-owned resources for the onboard SX1262 LoRa transceiver.
+#[cfg(feature = "lora")]
+pub struct LoraResources {
+    /// Dedicated LoRa chip-select pin.
+    pub chip_select: esp_hal::peripherals::GPIO23<'static>,
+    /// SX1262 BUSY pin.
+    pub busy: esp_hal::peripherals::GPIO19<'static>,
+    /// SX1262 DIO1 interrupt pin.
+    pub irq: esp_hal::peripherals::GPIO15<'static>,
 }
 
 /// Owns ESP-HAL peripherals before they are split into Nesso N1 services.
@@ -267,6 +284,12 @@ impl NessoN1 {
     pub const GPIO_LORA_CS: Gpio = Gpio(23);
     pub const GPIO_LORA_BUSY: Gpio = Gpio(19);
     pub const GPIO_LORA_IRQ: Gpio = Gpio(15);
+    /// Onboard LoRa transceiver model.
+    pub const LORA_CONTROLLER: &'static str = "SX1262";
+    /// Documented onboard LoRa RF range.
+    pub const LORA_MIN_FREQUENCY_HZ: u32 = 850_000_000;
+    /// Documented onboard LoRa RF range.
+    pub const LORA_MAX_FREQUENCY_HZ: u32 = 960_000_000;
     pub const GPIO_GROVE_IO0: Gpio = Gpio(5);
     pub const GPIO_GROVE_IO1: Gpio = Gpio(4);
     pub const GPIO_HAT_IO1: Gpio = Gpio(2);
@@ -534,6 +557,12 @@ impl NessoN1Board {
                 software_interrupt: self.peripherals.SW_INTERRUPT,
             },
             flash: self.peripherals.FLASH,
+            #[cfg(feature = "lora")]
+            lora: LoraResources {
+                chip_select: self.peripherals.GPIO23,
+                busy: self.peripherals.GPIO19,
+                irq: self.peripherals.GPIO15,
+            },
         })
     }
 
@@ -607,6 +636,20 @@ impl NessoN1Board {
             .init()
             .map_err(|_: DisplayError<_, _>| BoardInitError::Display)?;
         Ok(display)
+    }
+
+    /// Builds the onboard SX1262 driver from the shared SPI bus and LoRa pins.
+    #[cfg(feature = "lora")]
+    pub fn configure_lora_from_parts(
+        spi: NessoSpi,
+        i2c: NessoI2c,
+        resources: LoraResources,
+    ) -> Result<crate::lora::NessoLora, BoardInitError> {
+        let cs = Output::new(resources.chip_select, Level::High, OutputConfig::default());
+        let busy = esp_hal::gpio::Input::new(resources.busy, esp_hal::gpio::InputConfig::default());
+        let irq = esp_hal::gpio::Input::new(resources.irq, esp_hal::gpio::InputConfig::default());
+        let spi_device = LcdSpiDevice::new(spi, cs, Delay::new());
+        Ok(crate::lora::Sx1262::new_nesso(spi_device, i2c, busy, irq))
     }
 }
 

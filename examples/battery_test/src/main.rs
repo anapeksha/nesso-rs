@@ -35,20 +35,43 @@ fn main() -> ! {
         abort()
     }
 
+    if nesso.enable_battery_charging().is_err() {
+        let _ = nesso
+            .display
+            .print_centered("Charge enable failed", 88, Rgb565::RED);
+    }
+
     let mut previous = BatteryLines::new();
 
     loop {
-        let status = match nesso.battery_status() {
-            Ok(status) => status,
-            Err(_) => abort(),
-        };
-
-        if !render_battery_status(&mut nesso.display, &mut previous, &status) {
-            abort()
+        match nesso.battery_status() {
+            Ok(status) => {
+                if !render_battery_status(&mut nesso.display, &mut previous, &status) {
+                    abort()
+                }
+            }
+            Err(_) => {
+                if !render_read_error(&mut nesso.display) {
+                    abort()
+                }
+            }
         }
 
         delay.delay_ms(1000);
     }
+}
+
+fn render_read_error(display: &mut NessoDisplay) -> bool {
+    display
+        .clear_region(
+            &Rectangle::new(Point::new(0, 88), Size::new(135, 100)),
+            Rgb565::BLACK,
+        )
+        .is_ok()
+        && display
+            .print_centered("Battery read", 112, Rgb565::RED)
+            .is_ok()
+        && display.print_centered("failed", 136, Rgb565::RED).is_ok()
 }
 
 struct BatteryLines {

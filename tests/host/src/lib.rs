@@ -4,6 +4,9 @@ pub mod audio;
 #[path = "../../../crates/nesso/src/input.rs"]
 pub mod input;
 
+#[path = "../../../crates/nesso/src/lora.rs"]
+pub mod lora;
+
 #[path = "../../../crates/nesso/src/display.rs"]
 pub mod display;
 

@@ -17,6 +17,9 @@ The combination of those sources resolves all requested GPIO and bus mappings:
 `LCD_CS=GPIO17`, `LCD_DC/LCD_RS=GPIO16`, `LCD_RST=E1.P1`, `LCD_BL=E1.P6`,
 touch and IMU interrupt line `GPIO3`, I2C `SDA=GPIO10`, `SCL=GPIO8`, SPI
 `MOSI=GPIO21`, `MISO=GPIO22`, `SCK=GPIO20`.
+LoRa mappings are also resolved: `LORA_CS=GPIO23`, `LORA_BUSY=GPIO19`,
+`LORA_IRQ/DIO1=GPIO15`, reset/enable on expander E0.P7, antenna-switch control
+on E0.P6, and LNA enable on E0.P5.
 
 ## Display
 
@@ -98,6 +101,27 @@ example are implemented for phone/app notification mirroring.
 Remaining gap: native OS notification capture still requires a companion phone
 app or platform-specific client permission. The SDK exposes the board-side BLE
 transport and mirror data model, not a mobile application.
+
+## LoRa
+
+Implemented: optional `nesso::lora` feature, Nesso-specific SX1262 resource
+handoff, typed LoRa PHY configuration, frequency validation for the documented
+850-960 MHz RF path, DIO2 RF-switch enable, PA/TX parameter setup, packet
+parameter setup, continuous and bounded receive, packet reads with RSSI/SNR
+metadata, instantaneous RSSI, standby/sleep, TX_DONE polling, and explicit
+packet transmit.
+
+Safety boundary: `Nesso::new`, `Nesso::into_lora`, and `Sx1262::new_nesso` do
+not start transmission. The send example is compile-time gated and requires
+`NESSO_LORA_ALLOW_TX=1` so examples do not accidentally transmit without the
+external antenna attached.
+
+Remaining gap: the display and LoRa currently share the documented SPI bus
+through exclusive ownership. The facade exposes `Nesso::into_lora`, which
+consumes the display path before returning the LoRa driver. Concurrent
+display-and-LoRa operation would require a shared SPI bus manager and is
+deferred until that ownership contract can be stabilized without hidden global
+state.
 
 ## Audio
 
