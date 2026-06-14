@@ -243,6 +243,7 @@ Hardware and architecture notes are kept in `docs/`:
 - `docs/m5gfx-analysis.md`
 - `docs/gap-analysis.md`
 - `docs/roadmap.md`
+- `HARDWARE_VALIDATION.md`
 
 Release maintainers should also use `HARDWARE_VALIDATION.md` before publishing
 a new release. It is the board-run checklist for examples and peripherals that
