@@ -54,6 +54,14 @@ jobs:
           RUSTFLAGS="--cfg nesso_host_tests" \
             cargo test --manifest-path tests/host/Cargo.toml --target "${HOST_TARGET}"
 
+      - name: Host clippy
+        shell: bash
+        run: |
+          HOST_TARGET="$(rustc -vV | sed -n 's/^host: //p')"
+          RUSTFLAGS="--cfg nesso_host_tests" \
+            cargo clippy --manifest-path tests/host/Cargo.toml \
+              --target "${HOST_TARGET}" --all-targets -- -D warnings
+
       - name: Build
         run: cargo build --workspace
 

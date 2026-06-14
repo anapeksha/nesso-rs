@@ -34,6 +34,14 @@ fn touch_coordinates_follow_display_orientation() {
         }
     );
     assert_eq!(
+        point.oriented(geometry, DisplayOrientation::PortraitInverted),
+        TouchPoint {
+            id: 7,
+            x: 124,
+            y: 219
+        }
+    );
+    assert_eq!(
         point.oriented(geometry, DisplayOrientation::LandscapeClockwise),
         TouchPoint {
             id: 7,

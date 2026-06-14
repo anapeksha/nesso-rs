@@ -191,6 +191,9 @@ cargo check --workspace --all-features
 HOST_TARGET="$(rustc -vV | sed -n 's/^host: //p')"
 RUSTFLAGS="--cfg nesso_host_tests" \
   cargo test --manifest-path tests/host/Cargo.toml --target "${HOST_TARGET}"
+RUSTFLAGS="--cfg nesso_host_tests" \
+  cargo clippy --manifest-path tests/host/Cargo.toml \
+    --target "${HOST_TARGET}" --all-targets -- -D warnings
 cargo build --workspace
 cargo build --workspace --release
 ```
@@ -222,6 +225,7 @@ Hardware and architecture notes are kept in `docs/`:
 - `docs/m5gfx-analysis.md`
 - `docs/gap-analysis.md`
 - `docs/roadmap.md`
+- `HARDWARE_VALIDATION.md`
 
 ## Release Process
 

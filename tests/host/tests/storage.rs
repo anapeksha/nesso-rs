@@ -1,6 +1,8 @@
 use embedded_storage::{ReadStorage, Storage};
 use nesso_host_tests::storage::{
-    FlashSettingsStore, KeyValueStore, SettingsPartition, SettingsStore, StorageError,
+    FlashSettingsStore, KeyValueStore, SETTINGS_CAPACITY, SETTINGS_FORMAT_VERSION,
+    SETTINGS_IMAGE_LEN, SETTINGS_KEY_MAX_LEN, SETTINGS_VALUE_MAX_LEN, SettingsPartition,
+    SettingsStore, StorageError,
 };
 
 #[derive(Clone)]
@@ -47,6 +49,9 @@ fn settings_store_enforces_capacity_and_replacement() -> Result<(), String> {
         .map_err(|error| format!("{error:?}"))?;
 
     assert_eq!(settings.len(), 1);
+    assert_eq!(settings.capacity(), SETTINGS_CAPACITY);
+    assert_eq!(settings.max_key_len(), SETTINGS_KEY_MAX_LEN);
+    assert_eq!(settings.max_value_len(), SETTINGS_VALUE_MAX_LEN);
     assert_eq!(settings.get("mode"), Some(&b"timer"[..]));
     assert!(settings.remove("mode"));
     assert!(settings.is_empty());
@@ -57,6 +62,16 @@ fn settings_store_enforces_capacity_and_replacement() -> Result<(), String> {
     );
     assert_eq!(settings.set("k", &[0; 49]), Err(StorageError::ValueTooLong));
     Ok(())
+}
+
+#[test]
+fn settings_public_format_constants_match_store_behavior() {
+    let settings = SettingsStore::new();
+    assert_eq!(settings.capacity(), 4);
+    assert_eq!(settings.max_key_len(), 24);
+    assert_eq!(settings.max_value_len(), 48);
+    assert_eq!(SETTINGS_IMAGE_LEN, 256);
+    assert_eq!(SETTINGS_FORMAT_VERSION, 2);
 }
 
 #[test]

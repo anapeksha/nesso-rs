@@ -5,7 +5,7 @@ use embedded_hal::{
     i2c::{ErrorType as I2cErrorType, I2c, Operation},
 };
 use nesso_host_tests::{
-    audio::{AudioError, Buzzer, Tone},
+    audio::{AudioError, Buzzer, TONE_QUEUE_CAPACITY, Tone},
     power::{ChargeStatus, Power},
     touch::{Touch, TouchEvent, TouchPoint},
 };
@@ -42,6 +42,7 @@ impl OutputPin for FakePin {
 fn queued_buzzer_is_non_blocking_and_reports_capacity() -> Result<(), String> {
     let mut buzzer = Buzzer::new(FakePin::default());
     assert!(!buzzer.is_busy());
+    assert_eq!(buzzer.queue_capacity(), TONE_QUEUE_CAPACITY);
 
     buzzer
         .enqueue(Tone::new(1_000, 2))
@@ -61,6 +62,26 @@ fn queued_buzzer_is_non_blocking_and_reports_capacity() -> Result<(), String> {
             .map_err(|error| format!("{error:?}"))?;
     }
     assert_eq!(buzzer.enqueue(Tone::new(2_000, 1)), Err(AudioError::QueueFull));
+    Ok(())
+}
+
+#[test]
+fn queued_buzzer_ignores_empty_tones_and_stop_clears_state() -> Result<(), String> {
+    let mut buzzer = Buzzer::new(FakePin::default());
+
+    assert!(buzzer.enqueue(Tone::new(0, 20)).is_ok());
+    assert!(buzzer.enqueue(Tone::new(2_000, 0)).is_ok());
+    assert!(!buzzer.is_busy());
+    assert_eq!(buzzer.queued_tones(), 0);
+
+    buzzer
+        .enqueue(Tone::new(1_000, 100))
+        .map_err(|error| format!("{error:?}"))?;
+    buzzer.poll(0).map_err(|error| format!("{error:?}"))?;
+    assert!(buzzer.is_busy());
+    buzzer.stop().map_err(|error| format!("{error:?}"))?;
+    assert!(!buzzer.is_busy());
+    assert_eq!(buzzer.queued_tones(), 0);
     Ok(())
 }
 

@@ -1,7 +1,10 @@
 use embedded_hal::{delay::DelayNs, digital::OutputPin};
 use heapless::Deque;
 
-const DEFAULT_TONE_QUEUE_CAPACITY: usize = 8;
+/// Fixed number of queued tones retained by [`Buzzer`].
+pub const TONE_QUEUE_CAPACITY: usize = 8;
+/// Maximum tone duration recommended for responsive event-loop applications.
+pub const MAX_RECOMMENDED_TONE_DURATION_MS: u32 = 250;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Tone {
@@ -25,7 +28,7 @@ impl Tone {
 
 pub struct Buzzer<PIN> {
     pin: PIN,
-    queue: Deque<Tone, DEFAULT_TONE_QUEUE_CAPACITY>,
+    queue: Deque<Tone, TONE_QUEUE_CAPACITY>,
     active: Option<ActiveTone>,
     active_level: bool,
 }
@@ -45,6 +48,12 @@ impl<PIN> Buzzer<PIN> {
     /// Releases the wrapped output pin.
     pub fn release(self) -> PIN {
         self.pin
+    }
+
+    /// Returns the fixed number of tones the non-blocking queue can hold.
+    #[must_use]
+    pub const fn queue_capacity(&self) -> usize {
+        TONE_QUEUE_CAPACITY
     }
 }
 
@@ -101,26 +110,34 @@ where
     /// toggles the buzzer only when a half-period boundary has elapsed, so
     /// callers can poll it from an event loop without blocking UI or input.
     pub fn poll(&mut self, now_us: u64) -> Result<(), E> {
-        if self.active.is_none() {
-            if let Some(tone) = self.queue.pop_front() {
-                self.active = Some(ActiveTone::new(tone, now_us));
-                self.active_level = false;
-            } else {
-                return self.off();
+        loop {
+            if self.active.is_none() {
+                if let Some(tone) = self.queue.pop_front() {
+                    self.active = Some(ActiveTone::new(tone, now_us));
+                    self.active_level = false;
+                } else {
+                    return self.off();
+                }
             }
+
+            let Some(active) = self.active else {
+                return self.off();
+            };
+
+            if now_us.saturating_sub(active.started_at_us)
+                < u64::from(active.tone.duration_ms) * 1_000
+            {
+                break;
+            }
+
+            self.active = None;
+            self.active_level = false;
+            self.pin.set_low()?;
         }
 
         let Some(active) = self.active else {
             return self.off();
         };
-
-        if now_us.saturating_sub(active.started_at_us) >= u64::from(active.tone.duration_ms) * 1_000
-        {
-            self.active = None;
-            self.active_level = false;
-            self.pin.set_low()?;
-            return self.poll(now_us);
-        }
 
         if now_us.saturating_sub(active.last_toggle_us) >= active.half_period_us {
             self.active_level = !self.active_level;
