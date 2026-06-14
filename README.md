@@ -1,9 +1,9 @@
 # nesso
 
-`nesso` is a Rust-native SDK for the Arduino Nesso N1, an ESP32-C6 based
-device with display, touch, IMU, Wi-Fi, BLE, LoRa, audio, and battery/power-management
-hardware and optional external unit support for Nesso-compatible expansion
-sensors such as M5Stack Unit ENV Pro.
+`nesso` is a Rust-native `no_std` SDK for the Arduino Nesso N1, an ESP32-C6
+based device with display, touch, IMU, Wi-Fi, BLE, LoRa, audio, and
+battery/power-management hardware plus optional external unit support for
+Nesso-compatible expansion sensors such as M5Stack Unit ENV Pro.
 
 The public crate is [`nesso`](https://crates.io/crates/nesso). The repository is
 a Cargo workspace for examples and validation, but only the `nesso` crate is
@@ -43,35 +43,40 @@ Validated examples currently cover:
 
 Add the public facade crate:
 
-```bash
-cargo add nesso
+```toml
+[dependencies]
+nesso = "0.1.0"
 ```
 
 Enable Wi-Fi only for applications that use the ESP32-C6 radio:
 
-```bash
-cargo add nesso --features wifi
-cargo add esp-alloc
+```toml
+[dependencies]
+nesso = { version = "0.1.0", features = ["wifi"] }
+esp-alloc = "0.10"
 ```
 
 Enable ENV Pro support only for applications that use the external unit:
 
-```bash
-cargo add nesso --features env
+```toml
+[dependencies]
+nesso = { version = "0.1.0", features = ["env"] }
 ```
 
 Enable BLE only for applications that use the ESP32-C6 Bluetooth controller:
 
-```bash
-cargo add nesso --features ble
-cargo add esp-alloc
+```toml
+[dependencies]
+nesso = { version = "0.1.0", features = ["ble"] }
+esp-alloc = "0.10"
 ```
 
 Enable onboard SX1262 LoRa support only for applications that use the LoRa
 transceiver:
 
-```bash
-cargo add nesso --features lora
+```toml
+[dependencies]
+nesso = { version = "0.1.0", features = ["lora"] }
 ```
 
 ## Public Modules
@@ -114,6 +119,7 @@ Public modules have focused hardware or module-validation examples:
 | Module | Example |
 | --- | --- |
 | `nesso::Nesso` | `hello_world` |
+| composed facade usage | `dashboard` |
 | `nesso::bsp` | `board_info` |
 | `nesso::display` | `display_test`, `display_orientation` |
 | `nesso::touch` | `touch_test` |
@@ -133,7 +139,8 @@ Public modules have focused hardware or module-validation examples:
 ## Example
 
 The facade owns the fixed Nesso N1 wiring. Applications initialize ESP-HAL once,
-then hand the peripherals to `Nesso::new`.
+then hand the peripherals to `Nesso::new`. This example initializes the display,
+enables battery charging, initializes the IMU, and renders live board state.
 
 ```rust,ignore
 #![no_std]
@@ -142,7 +149,7 @@ then hand the peripherals to `Nesso::new`.
 use embedded_graphics::{pixelcolor::Rgb565, prelude::RgbColor};
 use embedded_hal::delay::DelayNs;
 use esp_hal::{clock::CpuClock, delay::Delay, main};
-use nesso::Nesso;
+use nesso::{Nesso, display::DisplayOrientation};
 
 #[main]
 fn main() -> ! {
@@ -154,16 +161,28 @@ fn main() -> ! {
         Err(_) => esp_hal::system::software_reset(),
     };
 
-    if nesso.display.clear(Rgb565::BLACK).is_err()
+    if nesso.display.set_orientation(DisplayOrientation::LandscapeClockwise).is_err()
+        || nesso.display.clear(Rgb565::BLACK).is_err()
         || nesso
             .display
-            .print_centered("Hello from nesso-rs", 120, Rgb565::WHITE)
+            .print_centered("Nesso N1", 40, Rgb565::CYAN)
             .is_err()
     {
         esp_hal::system::software_reset()
     }
 
+    let _ = nesso.enable_battery_charging();
+    let _ = nesso.init_imu();
+
     loop {
+        if let Ok(status) = nesso.battery_status() {
+            let _acceleration = nesso.acceleration();
+            let _ = nesso.display.clear(Rgb565::BLACK);
+            let _ = nesso.display.print_centered("Nesso N1", 40, Rgb565::CYAN);
+            let _ = nesso.display.print_centered("Battery", 78, Rgb565::WHITE);
+            let _ = nesso.display.print_centered("charging enabled", 112, Rgb565::GREEN);
+            let _ = status.percentage;
+        }
         delay.delay_ms(1000);
     }
 }
@@ -191,11 +210,12 @@ non-connectable advertising payloads using `nesso::ble::BeaconSchedule`. The
 `ble_notifications` example accepts `app|title|body` writes on the Nesso mirror
 characteristic and displays the latest mirrored phone/app notification.
 
-LoRa is behind the optional `lora` feature. `Nesso::new` and `Nesso::into_lora`
-do not start transmission or place the SX1262 in TX mode. Attach the external
-LoRa antenna before using `Sx1262::transmit`. The `lora_send` example is
-compile-time gated and will not transmit unless built with
-`NESSO_LORA_ALLOW_TX=1`.
+LoRa is behind the optional `lora` feature. When enabled, `nesso.lora` is
+available alongside `nesso.display`; the BSP shares the documented SPI bus using
+`embedded-hal-bus` with separate chip-select pins. `Nesso::new` does not start
+transmission or place the SX1262 in TX mode. Attach the external LoRa antenna
+before using `Sx1262::transmit`. The `lora_send` example is compile-time gated
+and will not transmit unless built with `NESSO_LORA_ALLOW_TX=1`.
 
 ## Build
 

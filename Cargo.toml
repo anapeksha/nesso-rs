@@ -6,6 +6,7 @@ members = [
     "examples/display_test",
     "examples/display_orientation",
     "examples/dirty_regions",
+    "examples/dashboard",
     "examples/touch_test",
     "examples/input_events",
     "examples/input_test",
@@ -48,6 +49,7 @@ categories = ["embedded", "hardware-support", "no-std"]
 bmi2 = { version = "0.1.2", default-features = false }
 bt-hci = { version = "0.8.1", default-features = false }
 embedded-graphics = { version = "0.8.1", default-features = false }
+embedded-hal-bus = { version = "0.3.0", default-features = false }
 embassy-futures = { version = "0.1.2", default-features = false }
 embassy-net = { version = "0.9.1", default-features = false, features = [
     "dhcpv4",
@@ -60,6 +62,7 @@ embassy-time-driver = { version = "0.2.2", default-features = false, features = 
 ] }
 embedded-hal = { version = "1.0.0", default-features = false }
 embedded-hal-async = { version = "1.0.0", default-features = false }
+critical-section = "1.2.0"
 esp-alloc = { version = "0.10.0", default-features = true, features = [
     "esp32c6",
 ] }
@@ -92,6 +95,7 @@ esp-rtos = { version = "0.3.0", default-features = false, features = [
 ] }
 heapless = { version = "0.8.0", default-features = false }
 nb = "1.1.0"
+static_cell = "2.1.1"
 trouble-host = { version = "0.6.0", default-features = false, features = [
     "default-packet-pool",
     "gatt",

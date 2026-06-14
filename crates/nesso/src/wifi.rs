@@ -274,8 +274,7 @@ impl EspRadioWifi {
     /// continuing to use this [`EspRadioWifi`] value for station lifecycle
     /// control such as scan, connect, ensure-connected, and disconnect.
     ///
-    /// This method starts Wi-Fi if needed. Calling it more than once returns
-    /// [`EspRadioWifiError::InterfacesTaken`].
+    /// Repeat calls return [`EspRadioWifiError::InterfacesTaken`].
     pub fn take_interfaces(&mut self) -> Result<NetworkInterfaces, EspRadioWifiError> {
         self.start()?;
         self.interfaces

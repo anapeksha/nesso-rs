@@ -4,6 +4,11 @@ use heapless::Vec;
 use crate::display::{DisplayGeometry, DisplayOrientation};
 
 pub const FT6336U_ADDRESS: u8 = 0x38;
+// FT6336U register map: TD_STATUS reports active touches, P1_XH starts point 1.
+const REG_TD_STATUS: u8 = 0x02;
+const REG_P1_XH: u8 = 0x03;
+const TOUCH_COUNT_MASK: u8 = 0x0f;
+const COORDINATE_HIGH_MASK: u8 = 0x0f;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct TouchPoint {
@@ -102,14 +107,18 @@ where
     /// Reads the current touch points from the controller.
     pub fn read_state(&mut self) -> Result<TouchState, E> {
         let mut count = [0u8; 1];
-        self.i2c.write_read(self.address, &[0x02], &mut count)?;
-        let touches = count[0] & 0x0f;
+        self.i2c
+            .write_read(self.address, &[REG_TD_STATUS], &mut count)?;
+        let touches = count[0] & TOUCH_COUNT_MASK;
         let mut state = TouchState::default();
         if touches > 0 {
-            let mut data = [0u8; 4];
-            self.i2c.write_read(self.address, &[0x03], &mut data)?;
-            let x = (u16::from(data[0] & 0x0f) << 8) | u16::from(data[1]);
-            let y = (u16::from(data[2] & 0x0f) << 8) | u16::from(data[3]);
+            let mut point_bytes = [0u8; 4];
+            self.i2c
+                .write_read(self.address, &[REG_P1_XH], &mut point_bytes)?;
+            let x =
+                (u16::from(point_bytes[0] & COORDINATE_HIGH_MASK) << 8) | u16::from(point_bytes[1]);
+            let y =
+                (u16::from(point_bytes[2] & COORDINATE_HIGH_MASK) << 8) | u16::from(point_bytes[3]);
             let _ = state.points.push(TouchPoint { id: 0, x, y });
         }
         Ok(state)

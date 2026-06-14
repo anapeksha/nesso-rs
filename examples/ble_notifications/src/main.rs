@@ -298,10 +298,10 @@ where
 }
 
 fn padded_value(bytes: &[u8]) -> [u8; 20] {
-    let mut value = [0_u8; 20];
-    let len = bytes.len().min(value.len());
-    value[..len].copy_from_slice(&bytes[..len]);
-    value
+    let mut padded = [0_u8; 20];
+    let len = bytes.len().min(padded.len());
+    padded[..len].copy_from_slice(&bytes[..len]);
+    padded
 }
 
 fn show_status(display: &mut NessoDisplay, title: &str, line1: &str, line2: &str) {

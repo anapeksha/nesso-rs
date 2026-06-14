@@ -63,6 +63,21 @@ Pass criteria:
 - Partial updates are visible.
 - The display does not perform full-screen flashing during updates.
 
+## Dashboard
+
+```bash
+cargo build -p dashboard --release
+espflash flash --chip esp32c6 -p "$NESSO_PORT" \
+  target/riscv32imac-unknown-none-elf/release/dashboard
+```
+
+Pass criteria:
+
+- Landscape dashboard renders.
+- Battery percentage/voltage updates.
+- Touch state changes when the screen is touched.
+- IMU-derived motion/orientation text changes when the board is tilted.
+
 ## Touch
 
 ```bash
@@ -180,8 +195,9 @@ espflash flash --chip esp32c6 -p "$NESSO_PORT" \
 
 Pass criteria:
 
-- Display shows the SX1262 info screen before the SPI bus is handed to LoRa.
+- Display shows the SX1262 info screen and LoRa status.
 - The board does not reset after the SX1262 no-TX bring-up path runs.
+- Display remains usable after LoRa status reads.
 - No transmit path is exercised.
 
 ## LoRa Receive
@@ -194,8 +210,9 @@ espflash flash --chip esp32c6 -p "$NESSO_PORT" \
 
 Pass criteria:
 
-- Display shows the RX continuous screen before the SPI bus is handed to LoRa.
+- Display shows the RX continuous screen and receive status.
 - The board enters receive mode and remains stable.
+- Display remains usable while LoRa owns its shared SPI device.
 - No transmit path is exercised.
 
 ## LoRa Send
@@ -210,8 +227,9 @@ espflash flash --chip esp32c6 -p "$NESSO_PORT" \
 
 Pass criteria:
 
-- Display shows the antenna warning before the SPI bus is handed to LoRa.
+- Display shows the antenna warning and TX status.
 - Packets transmit only when built with `NESSO_LORA_ALLOW_TX=1`.
+- Display remains usable while transmit is active.
 - A second LoRa receiver configured for the same frequency can receive packets.
 
 ## Board Info

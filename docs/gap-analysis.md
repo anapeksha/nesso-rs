@@ -104,24 +104,22 @@ transport and mirror data model, not a mobile application.
 
 ## LoRa
 
-Implemented: optional `nesso::lora` feature, Nesso-specific SX1262 resource
-handoff, typed LoRa PHY configuration, frequency validation for the documented
-850-960 MHz RF path, DIO2 RF-switch enable, PA/TX parameter setup, packet
-parameter setup, continuous and bounded receive, packet reads with RSSI/SNR
-metadata, instantaneous RSSI, standby/sleep, TX_DONE polling, and explicit
-packet transmit.
+Implemented: optional `nesso::lora` feature, Nesso-specific SX1262 driver,
+shared SPI bus ownership through `embedded-hal-bus`, typed LoRa PHY
+configuration, frequency validation for the documented 850-960 MHz RF path,
+DIO2 RF-switch enable, PA/TX parameter setup, packet parameter setup,
+continuous and bounded receive, packet reads with RSSI/SNR metadata,
+instantaneous RSSI, standby/sleep, TX_DONE polling, and explicit packet
+transmit.
 
-Safety boundary: `Nesso::new`, `Nesso::into_lora`, and `Sx1262::new_nesso` do
-not start transmission. The send example is compile-time gated and requires
+Safety boundary: `Nesso::new` and `Sx1262::new_nesso` do not start
+transmission. The send example is compile-time gated and requires
 `NESSO_LORA_ALLOW_TX=1` so examples do not accidentally transmit without the
 external antenna attached.
 
-Remaining gap: the display and LoRa currently share the documented SPI bus
-through exclusive ownership. The facade exposes `Nesso::into_lora`, which
-consumes the display path before returning the LoRa driver. Concurrent
-display-and-LoRa operation would require a shared SPI bus manager and is
-deferred until that ownership contract can be stabilized without hidden global
-state.
+Remaining gap: LoRaWAN MAC behavior is not implemented. The SDK exposes the
+board SX1262 radio primitive; packet formats, LoRaWAN joining, duty-cycle
+policy, and application protocols remain application-owned.
 
 ## Audio
 

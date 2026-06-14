@@ -1,1 +1,23 @@
+# .clippy.toml — nesso-rs
+#
+# Stricter than default. Every suppression in source code needs a comment
+# explaining why. See REVIEWING.md for the full rationale.
+
+# Functions longer than this are flagged for splitting.
+too-many-lines-threshold = 50
+
+# More than this number of arguments suggests the function is doing too much,
+# or a config struct is missing.
+too-many-arguments-threshold = 6
+
+# Cognitive complexity limit. Default is 25; we tighten it.
+cognitive-complexity-threshold = 10
+
+# Warn on types that are large enough to be expensive to copy accidentally.
+# Embedded context: keep stack pressure in mind.
+trivial-copy-size-limit = 8
+
+# Disallow single-character binding names except in obvious iterator contexts.
+single-char-binding-names-threshold = 1
+
 stack-size-threshold = 12288

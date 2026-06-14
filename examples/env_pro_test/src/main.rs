@@ -78,11 +78,11 @@ fn render_measurement(display: &mut NessoDisplay, measurement: EnvMeasurement) -
         return false;
     }
 
-    let mut temp = String::<32>::new();
+    let mut temperature = String::<32>::new();
     let mut humidity = String::<32>::new();
     let mut pressure = String::<32>::new();
     let mut gas = String::<32>::new();
-    let _ = write!(temp, "Temp {:.1} C", measurement.temperature_c);
+    let _ = write!(temperature, "Temp {:.1} C", measurement.temperature_c);
     let _ = write!(humidity, "Humidity {:.1}%", measurement.humidity_percent);
     let _ = write!(pressure, "Pressure {:.1} hPa", measurement.pressure_hpa);
     match measurement.gas_resistance_ohm {
@@ -94,7 +94,9 @@ fn render_measurement(display: &mut NessoDisplay, measurement: EnvMeasurement) -
         }
     }
 
-    display.print_centered(&temp, 74, Rgb565::WHITE).is_ok()
+    display
+        .print_centered(&temperature, 74, Rgb565::WHITE)
+        .is_ok()
         && display.print_centered(&humidity, 98, Rgb565::WHITE).is_ok()
         && display
             .print_centered(&pressure, 122, Rgb565::WHITE)

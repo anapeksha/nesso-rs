@@ -4,11 +4,15 @@
 //! board bring-up helpers. It is intentionally specific to the Nesso N1 and does
 //! not provide a generic board abstraction layer.
 
+use core::cell::RefCell;
+
 use crate::audio::Buzzer;
 use crate::display::{
-    BusConfig, Display, DisplayError, DisplayGeometry, LcdSpiDevice, NullOutputPin, PanelConfig,
+    BusConfig, Display, DisplayError, DisplayGeometry, NullOutputPin, PanelConfig,
 };
+use critical_section::Mutex;
 use embedded_hal::{delay::DelayNs, i2c::I2c};
+use embedded_hal_bus::{i2c, spi};
 use esp_hal::{
     Blocking,
     delay::Delay,
@@ -20,6 +24,10 @@ use esp_hal::{
     },
     time::Rate,
 };
+use static_cell::StaticCell;
+
+static SPI2_BUS: StaticCell<Mutex<RefCell<NessoRawSpi>>> = StaticCell::new();
+static I2C0_BUS: StaticCell<Mutex<RefCell<NessoRawI2c>>> = StaticCell::new();
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BoardError {
@@ -38,10 +46,16 @@ pub enum BoardInitError {
     Expander,
     /// Display initialization failed.
     Display,
+    /// A static shared bus was already initialized.
+    SharedBus,
 }
 
 /// AW9523-compatible expander output-enable register.
 pub const EXPANDER_OUTPUT_ENABLE: u8 = 0x03;
+/// Expander global-control register used by the official Nesso N1 bring-up.
+pub const EXPANDER_GLOBAL_CONTROL: u8 = 0x01;
+/// Global-control value used before configuring Nesso N1 expander pins.
+pub const EXPANDER_GLOBAL_CONTROL_ENABLE: u8 = 0x01;
 /// AW9523-compatible expander output-state register.
 pub const EXPANDER_OUTPUT_STATE: u8 = 0x05;
 /// AW9523-compatible expander high-impedance register.
@@ -178,20 +192,23 @@ pub struct NessoN1 {
     resources: BoardResources,
 }
 
-/// Concrete blocking I2C type used by Nesso N1 helpers.
-pub type NessoI2c = EspI2c<'static, Blocking>;
-/// Concrete blocking SPI type used by Nesso N1 helpers.
-pub type NessoSpi = Spi<'static, Blocking>;
+/// Concrete blocking I2C bus type used before it is placed behind a shared bus.
+pub type NessoRawI2c = EspI2c<'static, Blocking>;
+/// Shared I2C device type used by Nesso N1 facade helpers.
+pub type NessoI2c = i2c::CriticalSectionDevice<'static, NessoRawI2c>;
+/// Concrete blocking SPI bus type used before it is placed behind a shared bus.
+pub type NessoRawSpi = Spi<'static, Blocking>;
+/// Shared SPI device type used by Nesso N1 SPI peripherals.
+pub type NessoSpiDevice = spi::CriticalSectionDevice<'static, NessoRawSpi, NessoOutput, Delay>;
 /// Concrete output-pin type used by Nesso N1 helpers.
 pub type NessoOutput = Output<'static>;
 /// Concrete display type returned by the board support package.
-pub type NessoDisplay =
-    Display<LcdSpiDevice<NessoSpi, NessoOutput, Delay>, NessoOutput, NullOutputPin, NullOutputPin>;
+pub type NessoDisplay = Display<NessoSpiDevice, NessoOutput, NullOutputPin, NullOutputPin>;
 /// Concrete passive-buzzer type returned by the board support package.
 pub type NessoBuzzer = Buzzer<NessoOutput>;
 /// Concrete LoRa SPI-device type used by the onboard SX1262 driver.
 #[cfg(feature = "lora")]
-pub type NessoLoraSpiDevice = LcdSpiDevice<NessoSpi, NessoOutput, Delay>;
+pub type NessoLoraSpiDevice = NessoSpiDevice;
 /// Board-owned radio resources required by `nesso::wifi`.
 #[cfg(feature = "wifi")]
 pub type WifiResources = crate::wifi::RadioResources;
@@ -227,13 +244,14 @@ pub struct NessoCoreParts {
     pub radio_runtime: RadioRuntimeResources,
     /// Flash peripheral for application storage.
     pub flash: esp_hal::peripherals::FLASH<'static>,
-    /// Onboard SX1262 LoRa resources.
+    /// Onboard SX1262 LoRa driver.
     #[cfg(feature = "lora")]
-    pub lora: LoraResources,
+    pub lora: crate::lora::NessoLora,
 }
 
 /// Board-owned resources for the onboard SX1262 LoRa transceiver.
 #[cfg(feature = "lora")]
+#[doc(hidden)]
 pub struct LoraResources {
     /// Dedicated LoRa chip-select pin.
     pub chip_select: esp_hal::peripherals::GPIO23<'static>,
@@ -382,8 +400,13 @@ impl NessoN1 {
         Delay: DelayNs,
     {
         let expander = Self::ADDR_EXPANDER_1.0;
-        let _discarded = read_register(i2c, expander, 0x01)?;
-        write_register(i2c, expander, 0x01, 0x01)?;
+        let _discarded = read_register(i2c, expander, EXPANDER_GLOBAL_CONTROL)?;
+        write_register(
+            i2c,
+            expander,
+            EXPANDER_GLOBAL_CONTROL,
+            EXPANDER_GLOBAL_CONTROL_ENABLE,
+        )?;
         write_register(i2c, expander, EXPANDER_DEFAULT_OUTPUT, 0xFF)?;
         write_register(i2c, expander, EXPANDER_INTERRUPT_MASK, 0xFF)?;
         write_register(i2c, expander, EXPANDER_OUTPUT_ENABLE, 0x00)?;
@@ -421,8 +444,13 @@ impl NessoN1 {
         I2C: I2c<Error = Error>,
     {
         let address = Self::ADDR_EXPANDER_0.0;
-        let _discarded = read_register(i2c, address, 0x01)?;
-        write_register(i2c, address, 0x01, 0x01)?;
+        let _discarded = read_register(i2c, address, EXPANDER_GLOBAL_CONTROL)?;
+        write_register(
+            i2c,
+            address,
+            EXPANDER_GLOBAL_CONTROL,
+            EXPANDER_GLOBAL_CONTROL_ENABLE,
+        )?;
         write_register(i2c, address, EXPANDER_DEFAULT_OUTPUT, 0xFF)?;
         write_register(i2c, address, EXPANDER_INTERRUPT_MASK, 0xFF)?;
         configure_input_pull_up(i2c, address, Self::KEY1.pin)?;
@@ -461,21 +489,24 @@ impl NessoN1Board {
     /// Initializes the display and returns it with the main I2C bus.
     pub fn into_display_and_i2c(self) -> Result<(NessoDisplay, NessoI2c), BoardInitError> {
         let mut delay = Delay::new();
-        let mut i2c = Self::configure_i2c(
+        let mut raw_i2c = Self::configure_i2c(
             self.peripherals.I2C0,
             self.peripherals.GPIO10,
             self.peripherals.GPIO8,
         )?;
-        NessoN1::init_lcd_expander(&mut i2c, &mut delay).map_err(|_| BoardInitError::Expander)?;
+        NessoN1::init_lcd_expander(&mut raw_i2c, &mut delay)
+            .map_err(|_| BoardInitError::Expander)?;
+        let i2c_bus = Self::share_i2c(raw_i2c)?;
+        let i2c = i2c::CriticalSectionDevice::new(i2c_bus);
 
-        let display = Self::configure_display(
+        let spi_bus = Self::configure_spi_bus(
             self.peripherals.SPI2,
             self.peripherals.GPIO20,
             self.peripherals.GPIO21,
             self.peripherals.GPIO22,
-            self.peripherals.GPIO17,
-            self.peripherals.GPIO16,
         )?;
+        let display =
+            Self::configure_display(spi_bus, self.peripherals.GPIO17, self.peripherals.GPIO16)?;
         Ok((display, i2c))
     }
 
@@ -486,23 +517,24 @@ impl NessoN1Board {
     ) -> Result<(NessoDisplay, WifiResources, RadioRuntimeResources), BoardInitError> {
         let mut delay = Delay::new();
         {
-            let mut i2c = Self::configure_i2c(
+            let mut raw_i2c = Self::configure_i2c(
                 self.peripherals.I2C0,
                 self.peripherals.GPIO10,
                 self.peripherals.GPIO8,
             )?;
-            NessoN1::init_lcd_expander(&mut i2c, &mut delay)
+            NessoN1::init_lcd_expander(&mut raw_i2c, &mut delay)
                 .map_err(|_| BoardInitError::Expander)?;
+            let _i2c_bus = Self::share_i2c(raw_i2c)?;
         }
 
-        let display = Self::configure_display(
+        let spi_bus = Self::configure_spi_bus(
             self.peripherals.SPI2,
             self.peripherals.GPIO20,
             self.peripherals.GPIO21,
             self.peripherals.GPIO22,
-            self.peripherals.GPIO17,
-            self.peripherals.GPIO16,
         )?;
+        let display =
+            Self::configure_display(spi_bus, self.peripherals.GPIO17, self.peripherals.GPIO16)?;
         Ok((
             display,
             WifiResources {
@@ -518,20 +550,33 @@ impl NessoN1Board {
     /// Initializes the core services used by the public `nesso` facade.
     pub fn into_core_parts(self) -> Result<NessoCoreParts, BoardInitError> {
         let mut delay = Delay::new();
-        let mut i2c = Self::configure_i2c(
+        let mut raw_i2c = Self::configure_i2c(
             self.peripherals.I2C0,
             self.peripherals.GPIO10,
             self.peripherals.GPIO8,
         )?;
-        NessoN1::init_lcd_expander(&mut i2c, &mut delay).map_err(|_| BoardInitError::Expander)?;
+        NessoN1::init_lcd_expander(&mut raw_i2c, &mut delay)
+            .map_err(|_| BoardInitError::Expander)?;
+        let i2c_bus = Self::share_i2c(raw_i2c)?;
+        let i2c = i2c::CriticalSectionDevice::new(i2c_bus);
 
-        let display = Self::configure_display(
+        let spi_bus = Self::configure_spi_bus(
             self.peripherals.SPI2,
             self.peripherals.GPIO20,
             self.peripherals.GPIO21,
             self.peripherals.GPIO22,
-            self.peripherals.GPIO17,
-            self.peripherals.GPIO16,
+        )?;
+        let display =
+            Self::configure_display(spi_bus, self.peripherals.GPIO17, self.peripherals.GPIO16)?;
+        #[cfg(feature = "lora")]
+        let lora = Self::configure_lora_from_parts(
+            spi_bus,
+            i2c::CriticalSectionDevice::new(i2c_bus),
+            LoraResources {
+                chip_select: self.peripherals.GPIO23,
+                busy: self.peripherals.GPIO19,
+                irq: self.peripherals.GPIO15,
+            },
         )?;
         let buzzer = Buzzer::new(Output::new(
             self.peripherals.GPIO11,
@@ -558,11 +603,7 @@ impl NessoN1Board {
             },
             flash: self.peripherals.FLASH,
             #[cfg(feature = "lora")]
-            lora: LoraResources {
-                chip_select: self.peripherals.GPIO23,
-                busy: self.peripherals.GPIO19,
-                irq: self.peripherals.GPIO15,
-            },
+            lora,
         })
     }
 
@@ -580,7 +621,7 @@ impl NessoN1Board {
         i2c0: esp_hal::peripherals::I2C0<'static>,
         sda: esp_hal::peripherals::GPIO10<'static>,
         scl: esp_hal::peripherals::GPIO8<'static>,
-    ) -> Result<NessoI2c, BoardInitError> {
+    ) -> Result<NessoRawI2c, BoardInitError> {
         EspI2c::new(
             i2c0,
             I2cConfig::default().with_frequency(Rate::from_khz(400)),
@@ -589,14 +630,19 @@ impl NessoN1Board {
         .map_err(|_| BoardInitError::I2c)
     }
 
-    fn configure_display(
+    fn share_i2c(i2c: NessoRawI2c) -> Result<&'static Mutex<RefCell<NessoRawI2c>>, BoardInitError> {
+        I2C0_BUS
+            .try_init_with(|| Mutex::new(RefCell::new(i2c)))
+            .map(|bus| &*bus)
+            .ok_or(BoardInitError::SharedBus)
+    }
+
+    fn configure_spi_bus(
         spi2: esp_hal::peripherals::SPI2<'static>,
         sck: esp_hal::peripherals::GPIO20<'static>,
         mosi: esp_hal::peripherals::GPIO21<'static>,
         miso: esp_hal::peripherals::GPIO22<'static>,
-        cs_pin: esp_hal::peripherals::GPIO17<'static>,
-        dc_pin: esp_hal::peripherals::GPIO16<'static>,
-    ) -> Result<NessoDisplay, BoardInitError> {
+    ) -> Result<&'static Mutex<RefCell<NessoRawSpi>>, BoardInitError> {
         let spi = Spi::new(
             spi2,
             SpiConfig::default()
@@ -608,9 +654,21 @@ impl NessoN1Board {
         .with_mosi(mosi)
         .with_miso(miso);
 
+        SPI2_BUS
+            .try_init_with(|| Mutex::new(RefCell::new(spi)))
+            .map(|bus| &*bus)
+            .ok_or(BoardInitError::SharedBus)
+    }
+
+    fn configure_display(
+        spi_bus: &'static Mutex<RefCell<NessoRawSpi>>,
+        cs_pin: esp_hal::peripherals::GPIO17<'static>,
+        dc_pin: esp_hal::peripherals::GPIO16<'static>,
+    ) -> Result<NessoDisplay, BoardInitError> {
         let cs = Output::new(cs_pin, Level::High, OutputConfig::default());
         let dc = Output::new(dc_pin, Level::Low, OutputConfig::default());
-        let spi_device = LcdSpiDevice::new(spi, cs, Delay::new());
+        let spi_device = spi::CriticalSectionDevice::new(spi_bus, cs, Delay::new())
+            .map_err(|_| BoardInitError::Spi)?;
 
         let mut display = Display::new(
             spi_device,
@@ -640,15 +698,17 @@ impl NessoN1Board {
 
     /// Builds the onboard SX1262 driver from the shared SPI bus and LoRa pins.
     #[cfg(feature = "lora")]
+    #[doc(hidden)]
     pub fn configure_lora_from_parts(
-        spi: NessoSpi,
+        spi_bus: &'static Mutex<RefCell<NessoRawSpi>>,
         i2c: NessoI2c,
         resources: LoraResources,
     ) -> Result<crate::lora::NessoLora, BoardInitError> {
         let cs = Output::new(resources.chip_select, Level::High, OutputConfig::default());
         let busy = esp_hal::gpio::Input::new(resources.busy, esp_hal::gpio::InputConfig::default());
         let irq = esp_hal::gpio::Input::new(resources.irq, esp_hal::gpio::InputConfig::default());
-        let spi_device = LcdSpiDevice::new(spi, cs, Delay::new());
+        let spi_device = spi::CriticalSectionDevice::new(spi_bus, cs, Delay::new())
+            .map_err(|_| BoardInitError::Spi)?;
         Ok(crate::lora::Sx1262::new_nesso(spi_device, i2c, busy, irq))
     }
 }
@@ -689,9 +749,9 @@ pub fn read_register<I2C, Error>(i2c: &mut I2C, address: u8, register: u8) -> Re
 where
     I2C: I2c<Error = Error>,
 {
-    let mut value = [0u8];
-    i2c.write_read(address, &[register], &mut value)?;
-    Ok(value[0])
+    let mut register_byte = [0u8];
+    i2c.write_read(address, &[register], &mut register_byte)?;
+    Ok(register_byte[0])
 }
 
 /// Writes one byte to an I2C expander register.

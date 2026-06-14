@@ -15,6 +15,22 @@ use embedded_hal::{
 
 const COLOR_STREAM_PIXELS: usize = 128;
 const PIXEL_STREAM_PIXELS: usize = 128;
+// ST7789 command set, "Command Table 1" in Sitronix ST7789V-family datasheets.
+const CMD_SOFTWARE_RESET: u8 = 0x01;
+const CMD_SLEEP_OUT: u8 = 0x11;
+const CMD_DISPLAY_INVERSION_ON: u8 = 0x21;
+const CMD_COLUMN_ADDRESS_SET: u8 = 0x2A;
+const CMD_ROW_ADDRESS_SET: u8 = 0x2B;
+const CMD_MEMORY_WRITE: u8 = 0x2C;
+const CMD_PIXEL_FORMAT_SET: u8 = 0x3A;
+const CMD_DISPLAY_ON: u8 = 0x29;
+const PIXEL_FORMAT_RGB565: u8 = 0x55;
+// ST7789 reset/sleep timing from the controller initialization sequence.
+const RESET_PULSE_NS: u32 = 10_000_000;
+const RESET_RECOVERY_NS: u32 = 120_000_000;
+const SOFTWARE_RESET_DELAY_NS: u32 = 150_000_000;
+const SLEEP_OUT_DELAY_NS: u32 = 120_000_000;
+const DISPLAY_ON_DELAY_NS: u32 = 20_000_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DisplayError<SpiError, PinError> {
@@ -103,6 +119,7 @@ impl PixelRun {
     }
 }
 
+#[doc(hidden)]
 #[derive(Debug)]
 pub enum LcdSpiDeviceError<BusError, CsError> {
     Bus(BusError),
@@ -122,6 +139,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct LcdSpiDevice<Bus, Cs, Delay> {
     bus: Bus,
     cs: Cs,
@@ -267,19 +285,19 @@ where
     /// Initializes the ST7789-compatible panel.
     pub fn init(&mut self) -> Result<(), DisplayError<SpiError, PinError>> {
         self.reset.set_low().map_err(DisplayError::Pin)?;
-        self.delay_ns(10_000_000)?;
+        self.delay_ns(RESET_PULSE_NS)?;
         self.reset.set_high().map_err(DisplayError::Pin)?;
-        self.delay_ns(120_000_000)?;
-        self.command(0x01, &[])?;
-        self.delay_ns(150_000_000)?;
-        self.command(0x11, &[])?;
-        self.delay_ns(120_000_000)?;
-        self.command(0x3A, &[0x55])?;
+        self.delay_ns(RESET_RECOVERY_NS)?;
+        self.command(CMD_SOFTWARE_RESET, &[])?;
+        self.delay_ns(SOFTWARE_RESET_DELAY_NS)?;
+        self.command(CMD_SLEEP_OUT, &[])?;
+        self.delay_ns(SLEEP_OUT_DELAY_NS)?;
+        self.command(CMD_PIXEL_FORMAT_SET, &[PIXEL_FORMAT_RGB565])?;
         if self.panel.invert_colors {
-            self.command(0x21, &[])?;
+            self.command(CMD_DISPLAY_INVERSION_ON, &[])?;
         }
-        self.command(0x29, &[])?;
-        self.delay_ns(20_000_000)
+        self.command(CMD_DISPLAY_ON, &[])?;
+        self.delay_ns(DISPLAY_ON_DELAY_NS)
     }
 
     /// Enables or disables the display backlight pin.
@@ -452,15 +470,17 @@ where
         let x1 = x0 + area.size.width.saturating_sub(1) as u16;
         let y1 = y0 + area.size.height.saturating_sub(1) as u16;
         self.command(
-            0x2A,
+            CMD_COLUMN_ADDRESS_SET,
             &[(x0 >> 8) as u8, x0 as u8, (x1 >> 8) as u8, x1 as u8],
         )?;
         self.command(
-            0x2B,
+            CMD_ROW_ADDRESS_SET,
             &[(y0 >> 8) as u8, y0 as u8, (y1 >> 8) as u8, y1 as u8],
         )?;
         self.dc.set_low().map_err(DisplayError::Pin)?;
-        self.spi.write(&[0x2C]).map_err(DisplayError::Spi)?;
+        self.spi
+            .write(&[CMD_MEMORY_WRITE])
+            .map_err(DisplayError::Spi)?;
         self.dc.set_high().map_err(DisplayError::Pin)
     }
 
