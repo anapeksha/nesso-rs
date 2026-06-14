@@ -39,16 +39,16 @@ jobs:
         run: cargo fmt --check --all
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --target riscv32imac-unknown-none-elf --all-targets -- -D warnings
 
       - name: AI slop check
-        run: cargo run --package xtask --features host --target x86_64-unknown-linux-gnu -- lint
+        run: cargo xtask lint
 
       - name: Check
-        run: cargo check --workspace
+        run: cargo check --workspace --target riscv32imac-unknown-none-elf
 
       - name: Check all features
-        run: cargo check --workspace --all-features
+        run: cargo check --workspace --target riscv32imac-unknown-none-elf --all-features
 
       - name: Host tests
         shell: bash
@@ -66,10 +66,10 @@ jobs:
               --target "${HOST_TARGET}" --all-targets -- -D warnings
 
       - name: Build
-        run: cargo build --workspace
+        run: cargo build --workspace --target riscv32imac-unknown-none-elf
 
       - name: Release build
-        run: cargo build --workspace --release
+        run: cargo build --workspace --target riscv32imac-unknown-none-elf --release
 
       - name: Docs
         env:

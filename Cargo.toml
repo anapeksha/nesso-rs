@@ -1,7 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-    "xtask",
     "crates/nesso",
     "examples/hello_world",
     "examples/display_test",

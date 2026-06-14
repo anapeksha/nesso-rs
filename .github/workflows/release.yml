@@ -49,17 +49,17 @@ jobs:
           RUSTDOCFLAGS: -D warnings
         run: |
           cargo fmt --check --all
-          cargo clippy --workspace --all-targets -- -D warnings
-          cargo run --package xtask --features host --target x86_64-unknown-linux-gnu -- lint
-          cargo check --workspace
-          cargo check --workspace --all-features
+          cargo clippy --workspace --target riscv32imac-unknown-none-elf --all-targets -- -D warnings
+          cargo xtask lint
+          cargo check --workspace --target riscv32imac-unknown-none-elf
+          cargo check --workspace --target riscv32imac-unknown-none-elf --all-features
           HOST_TARGET="$(rustc -vV | sed -n 's/^host: //p')"
           RUSTFLAGS="--cfg nesso_host_tests" \
             cargo test --manifest-path tests/host/Cargo.toml --target "${HOST_TARGET}"
           RUSTFLAGS="--cfg nesso_host_tests" \
             cargo clippy --manifest-path tests/host/Cargo.toml \
               --target "${HOST_TARGET}" --all-targets -- -D warnings
-          cargo build --workspace --release
+          cargo build --workspace --target riscv32imac-unknown-none-elf --release
           cargo +nightly rustdoc -p nesso --lib \
             -Zbuild-std=core,alloc \
             --target riscv32imac-unknown-none-elf \
