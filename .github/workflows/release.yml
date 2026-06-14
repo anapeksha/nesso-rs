@@ -50,6 +50,7 @@ jobs:
         run: |
           cargo fmt --check --all
           cargo clippy --workspace --all-targets -- -D warnings
+          cargo run --package xtask --features host --target x86_64-unknown-linux-gnu -- lint
           cargo check --workspace
           cargo check --workspace --all-features
           HOST_TARGET="$(rustc -vV | sed -n 's/^host: //p')"

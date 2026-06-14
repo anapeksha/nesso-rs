@@ -32,6 +32,8 @@
 15. Add optional onboard SX1262 LoRa support with safe no-TX construction,
     typed configuration, receive, status/RSSI, and explicitly gated transmit
     examples.
+16. Add shared SPI bus ownership so display and LoRa are simultaneously usable
+    through the facade.
 
 ## Later
 
@@ -41,8 +43,6 @@
    crates unless a future helper remains strictly board-lifecycle focused.
 3. Add partition-table lookup when the ESP Rust storage stack exposes a stable
    named-partition API.
-4. Add a shared SPI bus ownership model if simultaneous display and LoRa use is
-   required by application crates.
-5. Add optional 802.15.4 services.
-6. Add hardware-in-the-loop CI scripts for Nesso N1 examples.
-7. Keep ENV Pro support raw-only unless an MIT-compatible open algorithm becomes available.
+4. Add optional 802.15.4 services.
+5. Add hardware-in-the-loop CI scripts for Nesso N1 examples.
+6. Keep ENV Pro support raw-only unless an MIT-compatible open algorithm becomes available.

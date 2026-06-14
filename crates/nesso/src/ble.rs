@@ -10,6 +10,14 @@ use crate::{bsp::RadioRuntimeResources, runtime};
 use esp_radio::ble::{Config, controller::BleConnector};
 use heapless::{String, Vec};
 
+// Bluetooth Core Assigned Numbers: GAP advertising data types.
+const AD_TYPE_FLAGS: u8 = 0x01;
+const AD_TYPE_COMPLETE_UUID16_LIST: u8 = 0x03;
+const AD_TYPE_COMPLETE_LOCAL_NAME: u8 = 0x09;
+const AD_TYPE_SERVICE_DATA_UUID16: u8 = 0x16;
+const AD_TYPE_MANUFACTURER_SPECIFIC: u8 = 0xFF;
+const LE_GENERAL_DISCOVERABLE_NO_BR_EDR: u8 = 0x06;
+
 /// Board-owned peripherals required to start the BLE controller.
 #[cfg(not(any(test, nesso_host_tests)))]
 pub struct BluetoothResources {
@@ -187,17 +195,17 @@ impl<const N: usize> Advertisement<N> {
 
     /// Appends the standard BLE discoverable/no-BR-EDR flags field.
     pub fn push_flags(&mut self) -> Result<(), BleError> {
-        self.push_field(0x01, &[0x06])
+        self.push_field(AD_TYPE_FLAGS, &[LE_GENERAL_DISCOVERABLE_NO_BR_EDR])
     }
 
     /// Appends a complete local name field.
     pub fn push_complete_name(&mut self, name: &str) -> Result<(), BleError> {
-        self.push_field(0x09, name.as_bytes())
+        self.push_field(AD_TYPE_COMPLETE_LOCAL_NAME, name.as_bytes())
     }
 
     /// Appends one complete 16-bit service UUID.
     pub fn push_service_uuid16(&mut self, uuid: u16) -> Result<(), BleError> {
-        self.push_field(0x03, &uuid.to_le_bytes())
+        self.push_field(AD_TYPE_COMPLETE_UUID16_LIST, &uuid.to_le_bytes())
     }
 
     /// Appends service data associated with one 16-bit service UUID.
@@ -209,7 +217,7 @@ impl<const N: usize> Advertisement<N> {
         payload
             .extend_from_slice(data)
             .map_err(|_| BleError::AdvertisementTooLong)?;
-        self.push_field(0x16, payload.as_slice())
+        self.push_field(AD_TYPE_SERVICE_DATA_UUID16, payload.as_slice())
     }
 
     /// Appends manufacturer-specific advertising data.
@@ -225,7 +233,7 @@ impl<const N: usize> Advertisement<N> {
         payload
             .extend_from_slice(data)
             .map_err(|_| BleError::AdvertisementTooLong)?;
-        self.push_field(0xFF, payload.as_slice())
+        self.push_field(AD_TYPE_MANUFACTURER_SPECIFIC, payload.as_slice())
     }
 
     /// Returns the encoded advertising payload.

@@ -56,18 +56,22 @@ fn main() -> ! {
         abort()
     }
 
-    let mut lora = match nesso.into_lora() {
-        Ok(lora) => lora,
-        Err(_) => loop {
-            delay.delay_ms(1000);
-        },
+    let transmit_ready = nesso.lora.configure(LoraConfig::new(FREQUENCY_HZ)).is_ok();
+    let status = if transmit_ready {
+        "TX ready"
+    } else {
+        "TX error"
     };
-
-    let transmit_ready = lora.configure(LoraConfig::new(FREQUENCY_HZ)).is_ok();
+    let color = if transmit_ready {
+        Rgb565::GREEN
+    } else {
+        Rgb565::RED
+    };
+    let _ = nesso.display.print_centered(status, 158, color);
 
     loop {
-        if transmit_ready && lora.transmit(b"nesso lora").is_ok() {
-            while matches!(lora.tx_done(), Ok(false)) {
+        if transmit_ready && nesso.lora.transmit(b"nesso lora").is_ok() {
+            while matches!(nesso.lora.tx_done(), Ok(false)) {
                 delay.delay_ms(10);
             }
         }

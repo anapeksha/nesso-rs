@@ -14,6 +14,39 @@ pub const AW32001_CHG_VOLTAGE: u8 = 0x04;
 pub const AW32001_TIMER_WD: u8 = 0x05;
 pub const AW32001_MAIN_CTRL: u8 = 0x06;
 pub const AW32001_SYS_STATUS: u8 = 0x08;
+// AW32001 charger register fields from the public register map used by Arduino's BSP.
+const AW32001_CHARGE_DISABLE_BIT: u8 = 3;
+const AW32001_HIZ_BIT: u8 = 4;
+const AW32001_SHIP_MODE_BIT: u8 = 5;
+const AW32001_WATCHDOG_RESET_BIT: u8 = 6;
+const AW32001_VIN_DPM_MASK: u8 = 0b0111_1000;
+const AW32001_VIN_DPM_SHIFT: u8 = 4;
+const AW32001_VIN_DPM_MIN_MV: u16 = 3880;
+const AW32001_VIN_DPM_MAX_MV: u16 = 5080;
+const AW32001_VIN_DPM_STEP_MV: u16 = 80;
+const AW32001_INPUT_CURRENT_MASK: u8 = 0b0000_1111;
+const AW32001_INPUT_CURRENT_MIN_MA: u16 = 50;
+const AW32001_INPUT_CURRENT_MAX_MA: u16 = 500;
+const AW32001_INPUT_CURRENT_STEP_MA: u16 = 30;
+const AW32001_UVLO_MASK: u8 = 0b0000_0111;
+const AW32001_CHARGE_CURRENT_MASK: u8 = 0b0011_1111;
+const AW32001_CHARGE_CURRENT_MIN_MA: u16 = 8;
+const AW32001_CHARGE_CURRENT_MAX_MA: u16 = 456;
+const AW32001_CHARGE_CURRENT_STEP_MA: u16 = 8;
+const AW32001_DISCHARGE_CURRENT_MASK: u8 = 0b1111_0000;
+const AW32001_DISCHARGE_CURRENT_SHIFT: u8 = 4;
+const AW32001_DISCHARGE_CURRENT_MIN_MA: u16 = 200;
+const AW32001_DISCHARGE_CURRENT_MAX_MA: u16 = 3200;
+const AW32001_DISCHARGE_CURRENT_STEP_MA: u16 = 200;
+const AW32001_CHARGE_VOLTAGE_MASK: u8 = 0b1111_1100;
+const AW32001_CHARGE_VOLTAGE_SHIFT: u8 = 2;
+const AW32001_CHARGE_VOLTAGE_MIN_MV: u16 = 3600;
+const AW32001_CHARGE_VOLTAGE_MAX_MV: u16 = 4545;
+const AW32001_CHARGE_VOLTAGE_STEP_MV: u16 = 15;
+const AW32001_CHARGE_STATUS_SHIFT: u8 = 3;
+const AW32001_CHARGE_STATUS_MASK: u8 = 0b11;
+const AW32001_WATCHDOG_MASK: u8 = 0b11;
+const AW32001_WATCHDOG_SHIFT: u8 = 5;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ChargeStatus {
@@ -173,13 +206,15 @@ where
     /// Reads charger state from the AW32001 status register.
     pub fn charge_status(&mut self) -> Result<ChargeStatus, E> {
         let status = self.read_charger_register(AW32001_SYS_STATUS)?;
-        Ok(match (status >> 3) & 0b11 {
-            0 => ChargeStatus::Discharging,
-            1 => ChargeStatus::Charging,
-            2 => ChargeStatus::Charging,
-            3 => ChargeStatus::Full,
-            _ => ChargeStatus::Unknown,
-        })
+        Ok(
+            match (status >> AW32001_CHARGE_STATUS_SHIFT) & AW32001_CHARGE_STATUS_MASK {
+                0 => ChargeStatus::Discharging,
+                1 => ChargeStatus::Charging,
+                2 => ChargeStatus::Charging,
+                3 => ChargeStatus::Full,
+                _ => ChargeStatus::Unknown,
+            },
+        )
     }
 
     /// Configures the charger with Nesso defaults and enables battery charging.
@@ -205,60 +240,76 @@ where
 
     /// Enables or disables battery charging on AW32001.
     pub fn set_charge_enabled(&mut self, enable: bool) -> Result<(), E> {
-        self.write_charger_bit(AW32001_POWER_ON_CFG, 3, !enable)
+        self.write_charger_bit(AW32001_POWER_ON_CFG, AW32001_CHARGE_DISABLE_BIT, !enable)
     }
 
     /// Sets the input voltage dynamic power-management limit.
     pub fn set_vin_dpm_voltage_mv(&mut self, voltage_mv: u16) -> Result<(), E> {
-        let voltage_mv = voltage_mv.clamp(3880, 5080);
-        let mut value = self.read_charger_register(AW32001_INPUT_SRC)?;
-        value &= !0b0111_1000;
-        value |= (((voltage_mv - 3880) / 80) as u8) << 4;
-        self.write_charger_register(AW32001_INPUT_SRC, value)
+        let voltage_mv = voltage_mv.clamp(AW32001_VIN_DPM_MIN_MV, AW32001_VIN_DPM_MAX_MV);
+        let mut input_src = self.read_charger_register(AW32001_INPUT_SRC)?;
+        input_src &= !AW32001_VIN_DPM_MASK;
+        input_src |= (((voltage_mv - AW32001_VIN_DPM_MIN_MV) / AW32001_VIN_DPM_STEP_MV) as u8)
+            << AW32001_VIN_DPM_SHIFT;
+        self.write_charger_register(AW32001_INPUT_SRC, input_src)
     }
 
     /// Sets the input current limit.
     pub fn set_input_current_limit_ma(&mut self, current_ma: u16) -> Result<(), E> {
-        let current_ma = current_ma.clamp(50, 500);
-        let mut value = self.read_charger_register(AW32001_INPUT_SRC)?;
-        value &= !0b0000_1111;
-        value |= ((current_ma - 50) / 30) as u8 & 0b0000_1111;
-        self.write_charger_register(AW32001_INPUT_SRC, value)
+        let current_ma =
+            current_ma.clamp(AW32001_INPUT_CURRENT_MIN_MA, AW32001_INPUT_CURRENT_MAX_MA);
+        let mut input_src = self.read_charger_register(AW32001_INPUT_SRC)?;
+        input_src &= !AW32001_INPUT_CURRENT_MASK;
+        input_src |= ((current_ma - AW32001_INPUT_CURRENT_MIN_MA) / AW32001_INPUT_CURRENT_STEP_MA)
+            as u8
+            & AW32001_INPUT_CURRENT_MASK;
+        self.write_charger_register(AW32001_INPUT_SRC, input_src)
     }
 
     /// Sets the battery under-voltage lockout threshold.
     pub fn set_battery_uvlo(&mut self, uvlo: UnderVoltageLockout) -> Result<(), E> {
-        let mut value = self.read_charger_register(AW32001_POWER_ON_CFG)?;
-        value &= !0b0000_0111;
-        value |= uvlo as u8 & 0b0000_0111;
-        self.write_charger_register(AW32001_POWER_ON_CFG, value)
+        let mut power_on_cfg = self.read_charger_register(AW32001_POWER_ON_CFG)?;
+        power_on_cfg &= !AW32001_UVLO_MASK;
+        power_on_cfg |= uvlo as u8 & AW32001_UVLO_MASK;
+        self.write_charger_register(AW32001_POWER_ON_CFG, power_on_cfg)
     }
 
     /// Sets the charge current.
     pub fn set_charge_current_ma(&mut self, current_ma: u16) -> Result<(), E> {
-        let current_ma = current_ma.clamp(8, 456);
-        let mut value = self.read_charger_register(AW32001_CHG_CURRENT)?;
-        value &= !0b0011_1111;
-        value |= ((current_ma - 8) / 8) as u8 & 0b0011_1111;
-        self.write_charger_register(AW32001_CHG_CURRENT, value)
+        let current_ma =
+            current_ma.clamp(AW32001_CHARGE_CURRENT_MIN_MA, AW32001_CHARGE_CURRENT_MAX_MA);
+        let mut charge_current = self.read_charger_register(AW32001_CHG_CURRENT)?;
+        charge_current &= !AW32001_CHARGE_CURRENT_MASK;
+        charge_current |= ((current_ma - AW32001_CHARGE_CURRENT_MIN_MA)
+            / AW32001_CHARGE_CURRENT_STEP_MA) as u8
+            & AW32001_CHARGE_CURRENT_MASK;
+        self.write_charger_register(AW32001_CHG_CURRENT, charge_current)
     }
 
     /// Sets the discharge current limit.
     pub fn set_discharge_current_ma(&mut self, current_ma: u16) -> Result<(), E> {
-        let current_ma = current_ma.clamp(200, 3200);
-        let mut value = self.read_charger_register(AW32001_TERM_CURRENT)?;
-        value &= !0b1111_0000;
-        value |= (((current_ma - 200) / 200) as u8 & 0b0000_1111) << 4;
-        self.write_charger_register(AW32001_TERM_CURRENT, value)
+        let current_ma = current_ma.clamp(
+            AW32001_DISCHARGE_CURRENT_MIN_MA,
+            AW32001_DISCHARGE_CURRENT_MAX_MA,
+        );
+        let mut term_current = self.read_charger_register(AW32001_TERM_CURRENT)?;
+        term_current &= !AW32001_DISCHARGE_CURRENT_MASK;
+        term_current |= (((current_ma - AW32001_DISCHARGE_CURRENT_MIN_MA)
+            / AW32001_DISCHARGE_CURRENT_STEP_MA) as u8
+            & AW32001_INPUT_CURRENT_MASK)
+            << AW32001_DISCHARGE_CURRENT_SHIFT;
+        self.write_charger_register(AW32001_TERM_CURRENT, term_current)
     }
 
     /// Sets the battery charge voltage.
     pub fn set_charge_voltage_mv(&mut self, voltage_mv: u16) -> Result<(), E> {
-        let voltage_mv = voltage_mv.clamp(3600, 4545);
-        let mut value = self.read_charger_register(AW32001_CHG_VOLTAGE)?;
-        value &= !0b1111_1100;
-        value |= (((voltage_mv - 3600) / 15) as u8) << 2;
-        self.write_charger_register(AW32001_CHG_VOLTAGE, value)
+        let voltage_mv =
+            voltage_mv.clamp(AW32001_CHARGE_VOLTAGE_MIN_MV, AW32001_CHARGE_VOLTAGE_MAX_MV);
+        let mut charge_voltage = self.read_charger_register(AW32001_CHG_VOLTAGE)?;
+        charge_voltage &= !AW32001_CHARGE_VOLTAGE_MASK;
+        charge_voltage |= (((voltage_mv - AW32001_CHARGE_VOLTAGE_MIN_MV)
+            / AW32001_CHARGE_VOLTAGE_STEP_MV) as u8)
+            << AW32001_CHARGE_VOLTAGE_SHIFT;
+        self.write_charger_register(AW32001_CHG_VOLTAGE, charge_voltage)
     }
 
     /// Sets the charger watchdog timeout.
@@ -273,25 +324,25 @@ where
             160 => 0b11,
             _ => 0b11,
         };
-        let mut value = self.read_charger_register(AW32001_TIMER_WD)?;
-        value &= !(0b11 << 5);
-        value |= bits << 5;
-        self.write_charger_register(AW32001_TIMER_WD, value)
+        let mut timer_watchdog = self.read_charger_register(AW32001_TIMER_WD)?;
+        timer_watchdog &= !(AW32001_WATCHDOG_MASK << AW32001_WATCHDOG_SHIFT);
+        timer_watchdog |= bits << AW32001_WATCHDOG_SHIFT;
+        self.write_charger_register(AW32001_TIMER_WD, timer_watchdog)
     }
 
     /// Feeds the AW32001 watchdog.
     pub fn feed_watchdog(&mut self) -> Result<(), E> {
-        self.write_charger_bit(AW32001_CHG_CURRENT, 6, true)
+        self.write_charger_bit(AW32001_CHG_CURRENT, AW32001_WATCHDOG_RESET_BIT, true)
     }
 
     /// Enables or disables AW32001 ship mode.
     pub fn set_ship_mode(&mut self, enable: bool) -> Result<(), E> {
-        self.write_charger_bit(AW32001_MAIN_CTRL, 5, enable)
+        self.write_charger_bit(AW32001_MAIN_CTRL, AW32001_SHIP_MODE_BIT, enable)
     }
 
     /// Enables or disables AW32001 high-impedance input mode.
     pub fn set_hiz(&mut self, enable: bool) -> Result<(), E> {
-        self.write_charger_bit(AW32001_POWER_ON_CFG, 4, enable)
+        self.write_charger_bit(AW32001_POWER_ON_CFG, AW32001_HIZ_BIT, enable)
     }
 
     fn read_control_word(&mut self, command: u8) -> Result<u16, E> {
@@ -301,17 +352,17 @@ where
     }
 
     fn read_fuel_gauge_register(&mut self, command: u8) -> Result<u8, E> {
-        let mut data = [0u8; 1];
+        let mut gauge_byte = [0u8; 1];
         self.i2c
-            .write_read(self.fuel_gauge_address, &[command], &mut data)?;
-        Ok(data[0])
+            .write_read(self.fuel_gauge_address, &[command], &mut gauge_byte)?;
+        Ok(gauge_byte[0])
     }
 
     fn read_charger_register(&mut self, command: u8) -> Result<u8, E> {
-        let mut data = [0u8; 1];
+        let mut charger_byte = [0u8; 1];
         self.i2c
-            .write_read(self.charger_address, &[command], &mut data)?;
-        Ok(data[0])
+            .write_read(self.charger_address, &[command], &mut charger_byte)?;
+        Ok(charger_byte[0])
     }
 
     fn write_charger_register(&mut self, command: u8, value: u8) -> Result<(), E> {
@@ -319,12 +370,12 @@ where
     }
 
     fn write_charger_bit(&mut self, command: u8, bit: u8, high: bool) -> Result<(), E> {
-        let mut value = self.read_charger_register(command)?;
+        let mut register_byte = self.read_charger_register(command)?;
         if high {
-            value |= 1u8 << bit;
+            register_byte |= 1u8 << bit;
         } else {
-            value &= !(1u8 << bit);
+            register_byte &= !(1u8 << bit);
         }
-        self.write_charger_register(command, value)
+        self.write_charger_register(command, register_byte)
     }
 }

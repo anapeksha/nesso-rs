@@ -27,8 +27,11 @@ pub const MAX_FREQUENCY_HZ: u32 = 960_000_000;
 const EXPANDER_0_ADDRESS: u8 = 0x43;
 const EXPANDER_OUTPUT_ENABLE: u8 = 0x03;
 const EXPANDER_OUTPUT_STATE: u8 = 0x05;
+const EXPANDER_HIGH_IMPEDANCE: u8 = 0x07;
 const EXPANDER_DEFAULT_OUTPUT: u8 = 0x09;
 const EXPANDER_INTERRUPT_MASK: u8 = 0x11;
+const EXPANDER_GLOBAL_CONTROL: u8 = 0x01;
+const EXPANDER_GLOBAL_CONTROL_ENABLE: u8 = 0x01;
 const LORA_LNA_ENABLE_PIN: u8 = 5;
 const LORA_ANTENNA_SWITCH_PIN: u8 = 6;
 const LORA_ENABLE_PIN: u8 = 7;
@@ -72,6 +75,20 @@ const IRQ_TIMEOUT: u16 = 1 << 9;
 const TX_BASE: u8 = 0;
 const RX_BASE: u8 = 128;
 const RX_CONTINUOUS_TIMEOUT: [u8; 3] = [0xFF, 0xFF, 0xFF];
+const SX126X_SPI_DUMMY: u8 = 0x00;
+const SLEEP_COLD_START: u8 = 0x00;
+const SLEEP_WARM_START: u8 = 0x04;
+const DIO2_RF_SWITCH_ENABLE: u8 = 0x01;
+// SX1262 high-power PA settings, datasheet SetPaConfig command.
+const PA_DUTY_CYCLE_HIGH_POWER: u8 = 0x04;
+const PA_HP_MAX_SX1262: u8 = 0x07;
+const PA_DEVICE_SEL_SX1262: u8 = 0x00;
+const PA_LUT_RESERVED: u8 = 0x01;
+const TX_RAMP_200_US: u8 = 0x04;
+const IRQ_TX_RX_MASK: u16 = IRQ_TX_DONE | IRQ_RX_DONE;
+const IRQ_DIO_DISABLED: u16 = 0;
+const LOW_DATA_RATE_OPTIMIZE_ON: u8 = 0x01;
+const LOW_DATA_RATE_OPTIMIZE_OFF: u8 = 0x00;
 
 /// Errors returned by the SX1262 driver.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -337,7 +354,11 @@ where
         &mut self,
         warm_start: bool,
     ) -> Result<(), LoraError<SpiError, I2cError, PinError>> {
-        let config = if warm_start { 0x04 } else { 0x00 };
+        let config = if warm_start {
+            SLEEP_WARM_START
+        } else {
+            SLEEP_COLD_START
+        };
         self.write_command(&[CMD_SET_SLEEP, config])
     }
 
@@ -364,10 +385,20 @@ where
         })?;
         self.begin()?;
         self.write_command(&[CMD_SET_PACKET_TYPE, PACKET_TYPE_LORA])?;
-        self.write_command(&[CMD_SET_DIO2_AS_RF_SWITCH, 0x01])?;
+        self.write_command(&[CMD_SET_DIO2_AS_RF_SWITCH, DIO2_RF_SWITCH_ENABLE])?;
         self.set_frequency(config.frequency_hz)?;
-        self.write_command(&[CMD_SET_PA_CONFIG, 0x04, 0x07, 0x00, 0x01])?;
-        self.write_command(&[CMD_SET_TX_PARAMS, config.output_power_dbm as u8, 0x04])?;
+        self.write_command(&[
+            CMD_SET_PA_CONFIG,
+            PA_DUTY_CYCLE_HIGH_POWER,
+            PA_HP_MAX_SX1262,
+            PA_DEVICE_SEL_SX1262,
+            PA_LUT_RESERVED,
+        ])?;
+        self.write_command(&[
+            CMD_SET_TX_PARAMS,
+            config.output_power_dbm as u8,
+            TX_RAMP_200_US,
+        ])?;
         self.write_command(&[CMD_SET_BUFFER_BASE_ADDRESS, TX_BASE, RX_BASE])?;
         self.write_command(&[
             CMD_SET_MODULATION_PARAMS,
@@ -377,16 +408,18 @@ where
             low_data_rate_optimize(config),
         ])?;
         self.set_packet_params(config, MAX_LORA_PAYLOAD_LEN as u8)?;
+        let irq_mask = IRQ_TX_RX_MASK.to_be_bytes();
+        let disabled_irq = IRQ_DIO_DISABLED.to_be_bytes();
         self.write_command(&[
             CMD_SET_DIO_IRQ_PARAMS,
-            0x03,
-            0xFF,
-            0x03,
-            0xFF,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
+            irq_mask[0],
+            irq_mask[1],
+            irq_mask[0],
+            irq_mask[1],
+            disabled_irq[0],
+            disabled_irq[1],
+            disabled_irq[0],
+            disabled_irq[1],
         ])?;
         self.clear_irq(u16::MAX)?;
         self.config = Some(config);
@@ -408,7 +441,12 @@ where
         self.clear_irq(u16::MAX)?;
         self.write_buffer(TX_BASE, payload)?;
         self.set_packet_params(config, payload.len() as u8)?;
-        self.write_command(&[CMD_SET_TX, 0x00, 0x00, 0x00])
+        self.write_command(&[
+            CMD_SET_TX,
+            SX126X_SPI_DUMMY,
+            SX126X_SPI_DUMMY,
+            SX126X_SPI_DUMMY,
+        ])
     }
 
     /// Starts continuous receive mode.
@@ -438,7 +476,7 @@ where
     /// Reads and clears IRQ status.
     pub fn irq_status(&mut self) -> Result<u16, LoraError<SpiError, I2cError, PinError>> {
         self.wait_ready()?;
-        let command = [CMD_GET_IRQ_STATUS, 0x00, 0x00];
+        let command = [CMD_GET_IRQ_STATUS, SX126X_SPI_DUMMY, SX126X_SPI_DUMMY];
         let mut out = [0; 3];
         self.spi
             .transaction(&mut [Operation::Write(&command), Operation::Read(&mut out)])
@@ -474,7 +512,7 @@ where
     /// Returns instantaneous RSSI in dBm.
     pub fn rssi_dbm(&mut self) -> Result<i16, LoraError<SpiError, I2cError, PinError>> {
         self.wait_ready()?;
-        let command = [CMD_GET_RSSI_INST, 0x00];
+        let command = [CMD_GET_RSSI_INST, SX126X_SPI_DUMMY];
         let mut out = [0; 2];
         self.spi
             .transaction(&mut [Operation::Write(&command), Operation::Read(&mut out)])
@@ -544,7 +582,7 @@ where
         output: &mut [u8],
     ) -> Result<(), LoraError<SpiError, I2cError, PinError>> {
         self.wait_ready()?;
-        let command = [CMD_READ_BUFFER, offset, 0x00];
+        let command = [CMD_READ_BUFFER, offset, SX126X_SPI_DUMMY];
         self.spi
             .transaction(&mut [Operation::Write(&command), Operation::Read(output)])
             .map_err(LoraError::Spi)
@@ -552,7 +590,7 @@ where
 
     fn rx_buffer_status(&mut self) -> Result<(u8, u8), LoraError<SpiError, I2cError, PinError>> {
         self.wait_ready()?;
-        let command = [CMD_GET_RX_BUFFER_STATUS, 0x00, 0x00];
+        let command = [CMD_GET_RX_BUFFER_STATUS, SX126X_SPI_DUMMY, SX126X_SPI_DUMMY];
         let mut out = [0; 3];
         self.spi
             .transaction(&mut [Operation::Write(&command), Operation::Read(&mut out)])
@@ -562,7 +600,12 @@ where
 
     fn packet_status(&mut self) -> Result<PacketStatus, LoraError<SpiError, I2cError, PinError>> {
         self.wait_ready()?;
-        let command = [CMD_GET_PACKET_STATUS, 0x00, 0x00, 0x00];
+        let command = [
+            CMD_GET_PACKET_STATUS,
+            SX126X_SPI_DUMMY,
+            SX126X_SPI_DUMMY,
+            SX126X_SPI_DUMMY,
+        ];
         let mut out = [0; 4];
         self.spi
             .transaction(&mut [Operation::Write(&command), Operation::Read(&mut out)])
@@ -602,8 +645,12 @@ where
         &mut self,
     ) -> Result<(), LoraError<SpiError, I2cError, PinError>> {
         let address = EXPANDER_0_ADDRESS;
-        let _discarded = self.read_register(address, 0x01)?;
-        self.write_register(address, 0x01, 0x01)?;
+        let _discarded = self.read_register(address, EXPANDER_GLOBAL_CONTROL)?;
+        self.write_register(
+            address,
+            EXPANDER_GLOBAL_CONTROL,
+            EXPANDER_GLOBAL_CONTROL_ENABLE,
+        )?;
         self.write_register(address, EXPANDER_DEFAULT_OUTPUT, 0xFF)?;
         self.write_register(address, EXPANDER_INTERRUPT_MASK, 0xFF)?;
         self.configure_expander_output(address, LORA_ENABLE_PIN)?;
@@ -632,8 +679,12 @@ where
         pin: u8,
     ) -> Result<(), LoraError<SpiError, I2cError, PinError>> {
         let mut output_enable = self.read_register(address, EXPANDER_OUTPUT_ENABLE)?;
-        output_enable &= !(1u8 << pin);
-        self.write_register(address, EXPANDER_OUTPUT_ENABLE, output_enable)
+        output_enable |= 1u8 << pin;
+        self.write_register(address, EXPANDER_OUTPUT_ENABLE, output_enable)?;
+
+        let mut high_impedance = self.read_register(address, EXPANDER_HIGH_IMPEDANCE)?;
+        high_impedance &= !(1u8 << pin);
+        self.write_register(address, EXPANDER_HIGH_IMPEDANCE, high_impedance)
     }
 
     fn write_expander_bit(
@@ -656,11 +707,11 @@ where
         address: u8,
         register: u8,
     ) -> Result<u8, LoraError<SpiError, I2cError, PinError>> {
-        let mut value = [0];
+        let mut register_byte = [0];
         self.i2c
-            .write_read(address, &[register], &mut value)
+            .write_read(address, &[register], &mut register_byte)
             .map_err(LoraError::I2c)?;
-        Ok(value[0])
+        Ok(register_byte[0])
     }
 
     fn write_register(
@@ -687,7 +738,7 @@ const fn low_data_rate_optimize(config: LoraConfig) -> u8 {
             | Bandwidth::Bw15
             | Bandwidth::Bw10
             | Bandwidth::Bw7,
-        ) => 0x01,
+        ) => LOW_DATA_RATE_OPTIMIZE_ON,
         (
             10,
             Bandwidth::Bw62
@@ -697,7 +748,7 @@ const fn low_data_rate_optimize(config: LoraConfig) -> u8 {
             | Bandwidth::Bw15
             | Bandwidth::Bw10
             | Bandwidth::Bw7,
-        ) => 0x01,
-        _ => 0x00,
+        ) => LOW_DATA_RATE_OPTIMIZE_ON,
+        _ => LOW_DATA_RATE_OPTIMIZE_OFF,
     }
 }

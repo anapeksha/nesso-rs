@@ -12,6 +12,10 @@ use embedded_hal::i2c::I2c;
 pub const BMI270_ADDRESS_LOW: u8 = 0x68;
 pub const BMI270_ADDRESS_HIGH: u8 = 0x69;
 pub const BMI270_CHIP_ID: u8 = 0x24;
+// BMI270 register map, Bosch BMI270 datasheet section "Register map".
+const REG_CHIP_ID: u8 = 0x00;
+const REG_ACC_DATA_X_LSB: u8 = 0x0c;
+const REG_GYR_DATA_X_LSB: u8 = 0x12;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Acceleration {
@@ -102,21 +106,21 @@ where
 
     /// Reads accelerometer data in milli-g.
     pub fn acceleration(&mut self) -> Result<Acceleration, bmi2::types::Error<E>> {
-        let data = self.data()?;
+        let sensor_sample = self.data()?;
         Ok(Acceleration {
-            x_mg: data.acc.x,
-            y_mg: data.acc.y,
-            z_mg: data.acc.z,
+            x_mg: sensor_sample.acc.x,
+            y_mg: sensor_sample.acc.y,
+            z_mg: sensor_sample.acc.z,
         })
     }
 
     /// Reads gyroscope data in milli-degrees per second.
     pub fn gyroscope(&mut self) -> Result<Gyroscope, bmi2::types::Error<E>> {
-        let data = self.data()?;
+        let sensor_sample = self.data()?;
         Ok(Gyroscope {
-            x_mdps: i32::from(data.gyr.x),
-            y_mdps: i32::from(data.gyr.y),
-            z_mdps: i32::from(data.gyr.z),
+            x_mdps: i32::from(sensor_sample.gyr.x),
+            y_mdps: i32::from(sensor_sample.gyr.y),
+            z_mdps: i32::from(sensor_sample.gyr.z),
         })
     }
 }
@@ -140,7 +144,7 @@ where
 {
     /// Verifies the BMI270 chip identifier.
     pub fn verify(&mut self) -> Result<(), ImuError<E>> {
-        let id = self.read_register(0x00).map_err(ImuError::Bus)?;
+        let id = self.read_register(REG_CHIP_ID).map_err(ImuError::Bus)?;
         if id == BMI270_CHIP_ID {
             Ok(())
         } else {
@@ -150,23 +154,25 @@ where
 
     /// Reads raw accelerometer registers.
     pub fn accelerometer(&mut self) -> Result<Acceleration, E> {
-        let mut data = [0u8; 6];
-        self.i2c.write_read(self.address, &[0x0c], &mut data)?;
+        let mut accel_bytes = [0u8; 6];
+        self.i2c
+            .write_read(self.address, &[REG_ACC_DATA_X_LSB], &mut accel_bytes)?;
         Ok(Acceleration {
-            x_mg: raw_i16(data[0], data[1]),
-            y_mg: raw_i16(data[2], data[3]),
-            z_mg: raw_i16(data[4], data[5]),
+            x_mg: raw_i16(accel_bytes[0], accel_bytes[1]),
+            y_mg: raw_i16(accel_bytes[2], accel_bytes[3]),
+            z_mg: raw_i16(accel_bytes[4], accel_bytes[5]),
         })
     }
 
     /// Reads raw gyroscope registers.
     pub fn gyroscope(&mut self) -> Result<Gyroscope, E> {
-        let mut data = [0u8; 6];
-        self.i2c.write_read(self.address, &[0x12], &mut data)?;
+        let mut gyro_bytes = [0u8; 6];
+        self.i2c
+            .write_read(self.address, &[REG_GYR_DATA_X_LSB], &mut gyro_bytes)?;
         Ok(Gyroscope {
-            x_mdps: i32::from(raw_i16(data[0], data[1])),
-            y_mdps: i32::from(raw_i16(data[2], data[3])),
-            z_mdps: i32::from(raw_i16(data[4], data[5])),
+            x_mdps: i32::from(raw_i16(gyro_bytes[0], gyro_bytes[1])),
+            y_mdps: i32::from(raw_i16(gyro_bytes[2], gyro_bytes[3])),
+            z_mdps: i32::from(raw_i16(gyro_bytes[4], gyro_bytes[5])),
         })
     }
 
@@ -183,9 +189,10 @@ where
     }
 
     fn read_register(&mut self, register: u8) -> Result<u8, E> {
-        let mut data = [0u8; 1];
-        self.i2c.write_read(self.address, &[register], &mut data)?;
-        Ok(data[0])
+        let mut register_byte = [0u8; 1];
+        self.i2c
+            .write_read(self.address, &[register], &mut register_byte)?;
+        Ok(register_byte[0])
     }
 }
 

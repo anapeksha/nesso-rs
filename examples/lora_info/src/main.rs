@@ -37,15 +37,14 @@ fn main() -> ! {
         abort()
     }
 
-    let mut lora = match nesso.into_lora() {
-        Ok(lora) => lora,
-        Err(_) => loop {
-            delay.delay_ms(1000);
-        },
+    let begin_ok = nesso.lora.begin().is_ok();
+    let status_ok = begin_ok && nesso.lora.status().is_ok();
+    let (status, color) = match (begin_ok, status_ok) {
+        (true, true) => ("Radio ready", Rgb565::GREEN),
+        (false, _) => ("Begin failed", Rgb565::RED),
+        (true, false) => ("Status failed", Rgb565::RED),
     };
-
-    let _ = lora.begin();
-    let _ = lora.status();
+    let _ = nesso.display.print_centered(status, 162, color);
 
     loop {
         delay.delay_ms(1000);

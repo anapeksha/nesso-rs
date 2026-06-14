@@ -312,6 +312,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dashboard"
+version = "0.0.0"
+dependencies = [
+ "embedded-graphics",
+ "embedded-hal 1.0.0",
+ "esp-backtrace",
+ "esp-bootloader-esp-idf",
+ "esp-hal",
+ "esp-println",
+ "heapless 0.8.0",
+ "nesso",
+]
+
+[[package]]
 name = "delegate"
 version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -574,6 +588,16 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c4c685bbef7fe13c3c6dd4da26841ed3980ef33e841cddfa15ce8a8fb3f1884"
 dependencies = [
+ "embedded-hal 1.0.0",
+]
+
+[[package]]
+name = "embedded-hal-bus"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "513e0b3a8fb7d3013a8ae17a834283f170deaf7d0eeab0a7c1a36ad4dd356d22"
+dependencies = [
+ "critical-section",
  "embedded-hal 1.0.0",
 ]
 
@@ -1459,12 +1483,14 @@ checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
 
 [[package]]
 name = "nesso"
-version = "0.0.9"
+version = "0.1.0"
 dependencies = [
  "bmi2",
+ "critical-section",
  "embassy-futures",
  "embedded-graphics",
  "embedded-hal 1.0.0",
+ "embedded-hal-bus",
  "embedded-storage",
  "esp-hal",
  "esp-radio",
@@ -1472,6 +1498,7 @@ dependencies = [
  "esp-storage",
  "heapless 0.8.0",
  "libm",
+ "static_cell",
 ]
 
 [[package]]
@@ -2084,6 +2111,10 @@ checksum = "0592e1c9d151f854e6fd382574c3a0855250e1d9b2f99d9281c6e6391af352f1"
 dependencies = [
  "memchr",
 ]
+
+[[package]]
+name = "xtask"
+version = "0.0.0"
 
 [[package]]
 name = "xtensa-lx"

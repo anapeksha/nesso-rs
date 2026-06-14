@@ -39,20 +39,24 @@ fn main() -> ! {
         abort()
     }
 
-    let mut lora = match nesso.into_lora() {
-        Ok(lora) => lora,
-        Err(_) => loop {
-            delay.delay_ms(1000);
-        },
+    let receive_ready = nesso.lora.configure(LoraConfig::new(FREQUENCY_HZ)).is_ok()
+        && nesso.lora.start_receive().is_ok();
+    let status = if receive_ready {
+        "RX ready"
+    } else {
+        "RX error"
     };
-
-    let receive_ready =
-        lora.configure(LoraConfig::new(FREQUENCY_HZ)).is_ok() && lora.start_receive().is_ok();
+    let color = if receive_ready {
+        Rgb565::GREEN
+    } else {
+        Rgb565::RED
+    };
+    let _ = nesso.display.print_centered(status, 164, color);
 
     let mut packet = [0u8; 64];
     loop {
         if receive_ready {
-            let _received = lora.read_packet(&mut packet);
+            let _received = nesso.lora.read_packet(&mut packet);
         }
         delay.delay_ms(100);
     }

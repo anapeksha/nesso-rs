@@ -115,16 +115,17 @@ applications.
 
 ## LoRa Model
 
-The Nesso N1 SX1262 shares the documented SPI bus with the LCD. The current
-facade therefore exposes `Nesso::into_lora`, which consumes the facade and
-releases the display SPI bus to the LoRa driver. This keeps ownership explicit
-and avoids unsynchronized chip-select sharing.
+The Nesso N1 SX1262 shares the documented SPI bus with the LCD. The BSP places
+the raw ESP-HAL SPI bus behind an `embedded-hal-bus`
+`CriticalSectionDevice` setup, giving the LCD and SX1262 separate SPI devices
+with separate chip-select pins. This keeps synchronization in the board layer
+and lets applications use `nesso.display` and `nesso.lora` at the same time.
 
 `nesso::lora` is gated behind the `lora` feature and provides typed LoRa
 configuration, standby/sleep, continuous or bounded receive, IRQ/status reads,
-RSSI/packet metadata, and explicit packet transmit. `Nesso::new`,
-`Nesso::into_lora`, and `Sx1262::new_nesso` do not transmit. The transmit path
-is intentionally a named method with antenna-safety documentation.
+RSSI/packet metadata, and explicit packet transmit. `Nesso::new` and
+`Sx1262::new_nesso` do not transmit. The transmit path is intentionally a named
+method with antenna-safety documentation.
 
 ## Storage Model
 

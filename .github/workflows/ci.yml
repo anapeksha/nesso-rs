@@ -41,6 +41,9 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+      - name: AI slop check
+        run: cargo run --package xtask --features host --target x86_64-unknown-linux-gnu -- lint
+
       - name: Check
         run: cargo check --workspace
 

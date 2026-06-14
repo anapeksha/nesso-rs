@@ -136,14 +136,19 @@ pub enum NessoError {
 
 /// Board-owned Nesso N1 SDK.
 ///
-/// `display`, `audio`, and `wifi` own independent hardware resources and are
-/// exposed as fields. Touch, IMU, and power share the board I2C bus, so they are
-/// exposed as methods that borrow the bus internally.
+/// `display`, `audio`, and optional `lora` are exposed as fields. Touch, IMU,
+/// power, and LoRa frontend control use a shared board I2C bus internally.
 pub struct Nesso {
     /// ST7789P3 display driver.
     pub display: NessoDisplay,
     /// Passive buzzer driver.
     pub audio: NessoBuzzer,
+    /// Onboard SX1262 LoRa driver.
+    ///
+    /// This field exists when the `lora` feature is enabled. It shares the
+    /// board SPI bus with the display through BSP-owned synchronization.
+    #[cfg(feature = "lora")]
+    pub lora: NessoLora,
     i2c: NessoI2c,
     #[cfg(feature = "wifi")]
     wifi: Option<WifiResources>,
@@ -154,8 +159,6 @@ pub struct Nesso {
     #[cfg(any(feature = "wifi", feature = "ble"))]
     radio_runtime_started: bool,
     flash: Option<esp_hal::peripherals::FLASH<'static>>,
-    #[cfg(feature = "lora")]
-    lora: Option<crate::bsp::LoraResources>,
     imu_initialized: bool,
     previous_touch: TouchState,
 }
@@ -169,6 +172,8 @@ impl Nesso {
         let nesso = Self {
             display: parts.display,
             audio: parts.buzzer,
+            #[cfg(feature = "lora")]
+            lora: parts.lora,
             i2c: parts.i2c,
             #[cfg(feature = "wifi")]
             wifi: Some(parts.wifi),
@@ -179,8 +184,6 @@ impl Nesso {
             #[cfg(any(feature = "wifi", feature = "ble"))]
             radio_runtime_started: false,
             flash: Some(parts.flash),
-            #[cfg(feature = "lora")]
-            lora: Some(parts.lora),
             imu_initialized: false,
             previous_touch: TouchState::default(),
         };
@@ -359,18 +362,12 @@ impl Nesso {
 
     /// Consumes the facade and returns the onboard SX1262 LoRa driver.
     ///
-    /// This does not transmit and does not place the radio into TX mode. Attach
-    /// the external LoRa antenna before calling any transmit method.
-    ///
-    /// The current SDK display and LoRa paths share the documented SPI bus, so
-    /// this method consumes the facade and releases the display's SPI bus to the
-    /// LoRa driver.
+    /// Prefer the [`Nesso::lora`] field. Display and LoRa now share the
+    /// documented SPI bus through BSP-owned `embedded-hal-bus` devices, so
+    /// applications no longer need to consume the facade for LoRa access.
     #[cfg(feature = "lora")]
+    #[deprecated(note = "use the nesso.lora field; display and LoRa now share SPI safely")]
     pub fn into_lora(self) -> Result<NessoLora, NessoError> {
-        let resources = self.lora.ok_or(NessoError::LoraUnavailable)?;
-        let (spi_device, _dc, _reset, _backlight) = self.display.release();
-        let (spi, _lcd_cs, _delay) = spi_device.release();
-        crate::bsp::NessoN1Board::configure_lora_from_parts(spi, self.i2c, resources)
-            .map_err(|_| NessoError::Lora)
+        Ok(self.lora)
     }
 }

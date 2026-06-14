@@ -272,7 +272,7 @@ where
     }
 
     fn save(&mut self, settings: &SettingsStore) -> Result<(), Self::Error> {
-        let mut image = [0xff; SETTINGS_IMAGE_LEN];
+        let mut image = [ERASED_FLASH_BYTE; SETTINGS_IMAGE_LEN];
         serialize_settings(settings, &mut image)?;
         self.storage
             .write(self.offset, &image)
@@ -285,6 +285,7 @@ const SETTINGS_VERSION_V1: u8 = 1;
 const SETTINGS_VERSION: u8 = SETTINGS_FORMAT_VERSION;
 const HEADER_LEN_V1: usize = 6;
 const HEADER_LEN: usize = 10;
+const ERASED_FLASH_BYTE: u8 = 0xff;
 
 fn validate_partition(partition: SettingsPartition) -> Result<(), StorageError> {
     if partition.len < SETTINGS_IMAGE_LEN as u32 {
@@ -307,19 +308,19 @@ fn serialize_settings(
 
     for entry in &settings.entries {
         let key = entry.key.as_bytes();
-        let value = entry.value.as_slice();
-        let record_len = 2 + key.len() + value.len();
+        let stored_bytes = entry.value.as_slice();
+        let record_len = 2 + key.len() + stored_bytes.len();
         if cursor + record_len > image.len() {
             return Err(StorageError::Full);
         }
 
         image[cursor] = key.len() as u8;
-        image[cursor + 1] = value.len() as u8;
+        image[cursor + 1] = stored_bytes.len() as u8;
         cursor += 2;
         image[cursor..cursor + key.len()].copy_from_slice(key);
         cursor += key.len();
-        image[cursor..cursor + value.len()].copy_from_slice(value);
-        cursor += value.len();
+        image[cursor..cursor + stored_bytes.len()].copy_from_slice(stored_bytes);
+        cursor += stored_bytes.len();
     }
 
     let used_len = u16::try_from(cursor).map_err(|_| StorageError::Full)?;
@@ -336,7 +337,7 @@ fn deserialize_settings_into(
     settings: &mut SettingsStore,
 ) -> Result<(), StorageError> {
     *settings = SettingsStore::new();
-    if &image[..4] == [0xff; 4].as_slice() {
+    if &image[..4] == [ERASED_FLASH_BYTE; 4].as_slice() {
         return Ok(());
     }
     if &image[..4] != SETTINGS_MAGIC {
@@ -382,9 +383,9 @@ fn deserialize_records(
         let key = core::str::from_utf8(&image[cursor..cursor + key_len])
             .map_err(|_| StorageError::InvalidFormat)?;
         cursor += key_len;
-        let value = &image[cursor..cursor + value_len];
+        let stored_bytes = &image[cursor..cursor + value_len];
         cursor += value_len;
-        settings.set(key, value)?;
+        settings.set(key, stored_bytes)?;
     }
 
     Ok(())

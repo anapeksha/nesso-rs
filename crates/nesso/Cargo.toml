@@ -4,7 +4,7 @@ description = "Rust SDK facade for Arduino Nesso N1 on ESP32-C6."
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-version = "0.0.9"
+version = "0.1.0"
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
@@ -15,7 +15,9 @@ categories.workspace = true
 
 [dependencies]
 bmi2.workspace = true
+critical-section.workspace = true
 embedded-graphics.workspace = true
+embedded-hal-bus.workspace = true
 embedded-hal.workspace = true
 embassy-futures = { workspace = true, optional = true }
 esp-hal.workspace = true
@@ -27,6 +29,7 @@ esp-storage = { version = "0.9.0", default-features = false, features = [
 embedded-storage = "0.3.1"
 heapless.workspace = true
 libm = { version = "0.2.15", default-features = false }
+static_cell.workspace = true
 
 [features]
 default = []
