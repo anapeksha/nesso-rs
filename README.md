@@ -1,7 +1,7 @@
 # nesso
 
 `nesso` is a Rust-native SDK for the Arduino Nesso N1, an ESP32-C6 based
-device with display, touch, IMU, Wi-Fi, audio, and battery/power-management
+device with display, touch, IMU, Wi-Fi, BLE, LoRa, audio, and battery/power-management
 hardware and optional external unit support for Nesso-compatible expansion
 sensors such as M5Stack Unit ENV Pro.
 
@@ -32,6 +32,8 @@ Validated examples currently cover:
   interface handoff using `esp-radio`
 - ESP32-C6 BLE controller lifecycle with a connectable GATT peripheral example
   and notification-mirroring GATT surface
+- SX1262 LoRa construction, safe no-TX bring-up, receive mode, and explicitly
+  gated transmit example
 - Motion/context helpers derived from BMI270 acceleration samples
 - Lightweight layout, text, progress, transition, shape, and sprite helpers
 - M5Stack Unit ENV Pro BME688 environmental reads over I2C/Qwiic
@@ -65,6 +67,13 @@ cargo add nesso --features ble
 cargo add esp-alloc
 ```
 
+Enable onboard SX1262 LoRa support only for applications that use the LoRa
+transceiver:
+
+```bash
+cargo add nesso --features lora
+```
+
 ## Public Modules
 
 - `nesso::Nesso`: public facade and shared board ownership.
@@ -76,6 +85,8 @@ cargo add esp-alloc
   feature.
 - `nesso::ble`: ESP32-C6 BLE controller lifecycle and HCI handoff, gated
   behind the `ble` feature.
+- `nesso::lora`: onboard SX1262 LoRa transceiver support, gated behind the
+  `lora` feature.
 - `nesso::runtime`: explicit ESP radio runtime startup helpers for Wi-Fi/BLE
   async applications.
 - `nesso::touch`: FT6336U touch controller support.
@@ -113,6 +124,7 @@ Public modules have focused hardware or module-validation examples:
 | `nesso::power` | `battery_test`, `power_status` |
 | `nesso::wifi` | `wifi_scan`, `wifi_net_stack` |
 | `nesso::ble` | `ble_peripheral`, `ble_beacon`, `ble_notifications`, `ble_notification_mirror` |
+| `nesso::lora` | `lora_info`, `lora_receive`, `lora_send` |
 | `nesso::storage` | `storage_test`, `storage_settings` |
 | `nesso::ui` | `ui_test` |
 | `nesso::sprite` | `dirty_regions` |
@@ -179,6 +191,12 @@ non-connectable advertising payloads using `nesso::ble::BeaconSchedule`. The
 `ble_notifications` example accepts `app|title|body` writes on the Nesso mirror
 characteristic and displays the latest mirrored phone/app notification.
 
+LoRa is behind the optional `lora` feature. `Nesso::new` and `Nesso::into_lora`
+do not start transmission or place the SX1262 in TX mode. Attach the external
+LoRa antenna before using `Sx1262::transmit`. The `lora_send` example is
+compile-time gated and will not transmit unless built with
+`NESSO_LORA_ALLOW_TX=1`.
+
 ## Build
 
 Install Rust with the target specified in `rust-toolchain.toml`, then run:
@@ -225,15 +243,20 @@ Hardware and architecture notes are kept in `docs/`:
 - `docs/m5gfx-analysis.md`
 - `docs/gap-analysis.md`
 - `docs/roadmap.md`
-- `HARDWARE_VALIDATION.md`
+
+Release maintainers should also use `HARDWARE_VALIDATION.md` before publishing
+a new release. It is the board-run checklist for examples and peripherals that
+cannot be fully validated by CI.
 
 ## Release Process
 
 Releases are published from GitHub Releases.
 
 1. Merge through a pull request to `main`.
-2. Create and push the release tag.
-3. Publish a GitHub Release for that tag.
+2. Run the software validation commands from the build section.
+3. Run the board checklist in `HARDWARE_VALIDATION.md` on a connected Nesso N1.
+4. Create and push the release tag.
+5. Publish a GitHub Release for that tag.
 
 The release workflow validates the workspace and publishes only the public
 `nesso` crate to crates.io.

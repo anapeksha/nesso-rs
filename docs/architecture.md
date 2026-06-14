@@ -23,6 +23,10 @@ surface:
 - BLE exposes the ESP32-C6 HCI connector lifecycle using `esp-radio`, with
   fixed-capacity beacon scheduling types and Trouble-based examples for
   phone-visible GATT, passive scanning, and notification mirroring validation.
+- LoRa exposes the onboard SX1262 as an explicit opt-in driver. Driver
+  construction does not power the transmitter or enter TX mode; applications
+  must configure the radio and call transmit explicitly after attaching the
+  external antenna.
 - Storage uses fixed-capacity `heapless` data structures and an optional
   `esp-storage` flash adapter with a documented SDK settings partition.
 - `nesso::runtime` centralizes ESP radio runtime startup so async applications
@@ -108,6 +112,19 @@ on top of that connector.
 Display, touch, IMU, power, audio, storage, and ENV drivers remain
 `embedded-hal` first. They do not force an executor onto consuming
 applications.
+
+## LoRa Model
+
+The Nesso N1 SX1262 shares the documented SPI bus with the LCD. The current
+facade therefore exposes `Nesso::into_lora`, which consumes the facade and
+releases the display SPI bus to the LoRa driver. This keeps ownership explicit
+and avoids unsynchronized chip-select sharing.
+
+`nesso::lora` is gated behind the `lora` feature and provides typed LoRa
+configuration, standby/sleep, continuous or bounded receive, IRQ/status reads,
+RSSI/packet metadata, and explicit packet transmit. `Nesso::new`,
+`Nesso::into_lora`, and `Sx1262::new_nesso` do not transmit. The transmit path
+is intentionally a named method with antenna-safety documentation.
 
 ## Storage Model
 
