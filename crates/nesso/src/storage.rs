@@ -6,6 +6,16 @@ pub const NESSO_SETTINGS_PARTITION: &str = "nesso_settings";
 pub const NESSO_SETTINGS_OFFSET: u32 = 0x00FC_0000;
 /// Reserved byte length for the SDK settings area.
 pub const NESSO_SETTINGS_LEN: u32 = 4096;
+/// Number of key/value entries held by [`SettingsStore`].
+pub const SETTINGS_CAPACITY: usize = 4;
+/// Maximum UTF-8 key length in bytes.
+pub const SETTINGS_KEY_MAX_LEN: usize = 24;
+/// Maximum value length in bytes.
+pub const SETTINGS_VALUE_MAX_LEN: usize = 48;
+/// Serialized flash image size in bytes.
+pub const SETTINGS_IMAGE_LEN: usize = 256;
+/// Current serialized settings image format version.
+pub const SETTINGS_FORMAT_VERSION: u8 = 2;
 
 /// Flash region used by a settings store.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -52,15 +62,15 @@ pub enum StorageError {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Entry {
     /// Entry key.
-    pub key: String<24>,
+    pub key: String<SETTINGS_KEY_MAX_LEN>,
     /// Entry value bytes.
-    pub value: Vec<u8, 48>,
+    pub value: Vec<u8, SETTINGS_VALUE_MAX_LEN>,
 }
 
 /// Heapless fixed-capacity key/value settings store.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SettingsStore {
-    entries: Vec<Entry, 4>,
+    entries: Vec<Entry, SETTINGS_CAPACITY>,
 }
 
 impl SettingsStore {
@@ -74,10 +84,10 @@ impl SettingsStore {
 
     /// Inserts or replaces one key/value pair.
     pub fn set(&mut self, key: &str, value: &[u8]) -> Result<(), StorageError> {
-        if key.len() > 24 {
+        if key.len() > SETTINGS_KEY_MAX_LEN {
             return Err(StorageError::KeyTooLong);
         }
-        if value.len() > 48 {
+        if value.len() > SETTINGS_VALUE_MAX_LEN {
             return Err(StorageError::ValueTooLong);
         }
         if let Some(entry) = self.entries.iter_mut().find(|entry| entry.key == key) {
@@ -88,11 +98,11 @@ impl SettingsStore {
                 .map_err(|_| StorageError::ValueTooLong)?;
             return Ok(());
         }
-        let mut stored_key = String::<24>::new();
+        let mut stored_key = String::<SETTINGS_KEY_MAX_LEN>::new();
         stored_key
             .push_str(key)
             .map_err(|_| StorageError::KeyTooLong)?;
-        let mut stored_value = Vec::<u8, 48>::new();
+        let mut stored_value = Vec::<u8, SETTINGS_VALUE_MAX_LEN>::new();
         stored_value
             .extend_from_slice(value)
             .map_err(|_| StorageError::ValueTooLong)?;
@@ -131,6 +141,24 @@ impl SettingsStore {
     /// Returns an iterator over stored entries.
     pub fn iter(&self) -> impl Iterator<Item = &Entry> {
         self.entries.iter()
+    }
+
+    /// Returns the fixed number of entries this store can hold.
+    #[must_use]
+    pub const fn capacity(&self) -> usize {
+        SETTINGS_CAPACITY
+    }
+
+    /// Returns the maximum key length in bytes.
+    #[must_use]
+    pub const fn max_key_len(&self) -> usize {
+        SETTINGS_KEY_MAX_LEN
+    }
+
+    /// Returns the maximum value length in bytes.
+    #[must_use]
+    pub const fn max_value_len(&self) -> usize {
+        SETTINGS_VALUE_MAX_LEN
     }
 
     #[must_use]
@@ -254,8 +282,7 @@ where
 
 const SETTINGS_MAGIC: &[u8; 4] = b"NSST";
 const SETTINGS_VERSION_V1: u8 = 1;
-const SETTINGS_VERSION: u8 = 2;
-const SETTINGS_IMAGE_LEN: usize = 256;
+const SETTINGS_VERSION: u8 = SETTINGS_FORMAT_VERSION;
 const HEADER_LEN_V1: usize = 6;
 const HEADER_LEN: usize = 10;
 

@@ -55,6 +55,9 @@ jobs:
           HOST_TARGET="$(rustc -vV | sed -n 's/^host: //p')"
           RUSTFLAGS="--cfg nesso_host_tests" \
             cargo test --manifest-path tests/host/Cargo.toml --target "${HOST_TARGET}"
+          RUSTFLAGS="--cfg nesso_host_tests" \
+            cargo clippy --manifest-path tests/host/Cargo.toml \
+              --target "${HOST_TARGET}" --all-targets -- -D warnings
           cargo build --workspace --release
           cargo +nightly rustdoc -p nesso --lib \
             -Zbuild-std=core,alloc \
