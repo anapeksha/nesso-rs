@@ -4,13 +4,13 @@
 use core::fmt::Write as _;
 
 use embedded_graphics::{pixelcolor::Rgb565, prelude::RgbColor};
-use embedded_hal::{delay::DelayNs, i2c::ErrorType};
+use embedded_hal::delay::DelayNs;
 use esp_backtrace as _;
 use esp_hal::{clock::CpuClock, delay::Delay, main};
 use heapless::String;
 use nesso::{
-    bsp::{NessoDisplay, NessoI2c, NessoN1Board},
-    env::{EnvError, EnvMeasurement, EnvPro},
+    bsp::{NessoDisplay, NessoEnv, NessoN1Board},
+    env::EnvMeasurement,
 };
 
 esp_bootloader_esp_idf::esp_app_desc!();
@@ -23,29 +23,21 @@ fn main() -> ! {
 }
 
 fn run(peripherals: esp_hal::peripherals::Peripherals) -> ! {
-    let (display, i2c) = match NessoN1Board::new(peripherals).into_display_and_i2c() {
+    let (display, env) = match NessoN1Board::new(peripherals).into_display_and_env() {
         Ok(parts) => parts,
         Err(_) => abort(),
     };
-    init_env_and_loop(display, i2c)
+    init_env_and_loop(display, env)
 }
 
-fn init_env_and_loop(mut display: NessoDisplay, i2c: NessoI2c) -> ! {
+fn init_env_and_loop(mut display: NessoDisplay, env: NessoEnv) -> ! {
     let mut delay = Delay::new();
-    let env = match create_env(i2c) {
-        Ok(env) => env,
-        Err(_) => {
-            show_status(&mut display, "ENV Pro", "BME688 init failed", Rgb565::RED);
-            abort()
-        }
-    };
-
     show_status(&mut display, "ENV Pro", "BME688 ready", Rgb565::GREEN);
     delay.delay_ms(500);
     read_loop(display, env)
 }
 
-fn read_loop(mut display: NessoDisplay, mut env: EnvPro<NessoI2c, Delay>) -> ! {
+fn read_loop(mut display: NessoDisplay, mut env: NessoEnv) -> ! {
     let mut delay = Delay::new();
     loop {
         let measurement = match env.measure() {
@@ -63,12 +55,6 @@ fn read_loop(mut display: NessoDisplay, mut env: EnvPro<NessoI2c, Delay>) -> ! {
 
         delay.delay_ms(2500);
     }
-}
-
-type EnvInitResult = Result<EnvPro<NessoI2c, Delay>, EnvError<<NessoI2c as ErrorType>::Error>>;
-
-fn create_env(i2c: NessoI2c) -> EnvInitResult {
-    EnvPro::new(i2c, Delay::new())
 }
 
 fn render_measurement(display: &mut NessoDisplay, measurement: EnvMeasurement) -> bool {

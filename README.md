@@ -9,10 +9,6 @@ The public crate is [`nesso`](https://crates.io/crates/nesso). The repository is
 a Cargo workspace for examples and validation, but only the `nesso` crate is
 published to crates.io.
 
-## Status
-
-This project is an early hardware-validated SDK foundation.
-
 This SDK targets only the Arduino Nesso N1. It intentionally does not provide a
 generic board abstraction layer, an M5Stack compatibility layer, or support for
 other ESP32-C6 boards.
@@ -45,14 +41,14 @@ Add the public facade crate:
 
 ```toml
 [dependencies]
-nesso = "0.1.0"
+nesso = "0.2.0"
 ```
 
 Enable Wi-Fi only for applications that use the ESP32-C6 radio:
 
 ```toml
 [dependencies]
-nesso = { version = "0.1.0", features = ["wifi"] }
+nesso = { version = "0.2.0", features = ["wifi"] }
 esp-alloc = "0.10"
 ```
 
@@ -60,14 +56,14 @@ Enable ENV Pro support only for applications that use the external unit:
 
 ```toml
 [dependencies]
-nesso = { version = "0.1.0", features = ["env"] }
+nesso = { version = "0.2.0", features = ["env"] }
 ```
 
 Enable BLE only for applications that use the ESP32-C6 Bluetooth controller:
 
 ```toml
 [dependencies]
-nesso = { version = "0.1.0", features = ["ble"] }
+nesso = { version = "0.2.0", features = ["ble"] }
 esp-alloc = "0.10"
 ```
 
@@ -76,7 +72,7 @@ transceiver:
 
 ```toml
 [dependencies]
-nesso = { version = "0.1.0", features = ["lora"] }
+nesso = { version = "0.2.0", features = ["lora"] }
 ```
 
 ## Public Modules
@@ -224,16 +220,17 @@ Install Rust with the target specified in `rust-toolchain.toml`, then run:
 ```bash
 cargo metadata --no-deps --format-version 1
 cargo fmt --check --all
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo check --workspace --all-features
+cargo clippy --workspace --target riscv32imac-unknown-none-elf --all-targets -- -D warnings
+cargo check --workspace --target riscv32imac-unknown-none-elf
+cargo check --workspace --target riscv32imac-unknown-none-elf --all-features
 HOST_TARGET="$(rustc -vV | sed -n 's/^host: //p')"
 RUSTFLAGS="--cfg nesso_host_tests" \
   cargo test --manifest-path tests/host/Cargo.toml --target "${HOST_TARGET}"
 RUSTFLAGS="--cfg nesso_host_tests" \
   cargo clippy --manifest-path tests/host/Cargo.toml \
     --target "${HOST_TARGET}" --all-targets -- -D warnings
-cargo build --workspace
-cargo build --workspace --release
+cargo build --workspace --target riscv32imac-unknown-none-elf
+cargo build --workspace --target riscv32imac-unknown-none-elf --release
 ```
 
 The host test harness exercises reusable logic that does not require hardware:

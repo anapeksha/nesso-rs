@@ -126,6 +126,26 @@ where
     I2C: I2c,
     DELAY: DelayNs,
 {
+    /// Probes the external sensor path for a BME688 at `0x77`.
+    pub fn probe(i2c: &mut I2C, delay: &mut DELAY) -> Result<(), EnvError<I2C::Error>> {
+        i2c.write(ENV_PRO_I2C_ADDRESS, &[REG_SOFT_RESET, SOFT_RESET_CMD])
+            .map_err(EnvError::Bus)?;
+        delay.delay_us(PERIOD_RESET_US);
+
+        let mut chip_id = [0u8; 1];
+        i2c.write_read(ENV_PRO_I2C_ADDRESS, &[REG_CHIP_ID], &mut chip_id)
+            .map_err(EnvError::Bus)?;
+        if chip_id[0] != BME688_CHIP_ID {
+            return Err(EnvError::InvalidChipId(chip_id[0]));
+        }
+
+        let mut variant_id = [0u8; 1];
+        i2c.write_read(ENV_PRO_I2C_ADDRESS, &[REG_VARIANT_ID], &mut variant_id)
+            .map_err(EnvError::Bus)?;
+        Variant::from_id(variant_id[0])?;
+        Ok(())
+    }
+
     /// Initializes the Unit ENV Pro with the default BME688 configuration.
     pub fn new(i2c: I2C, delay: DELAY) -> Result<Self, EnvError<I2C::Error>> {
         Self::with_config(i2c, delay, EnvConfig::default())
