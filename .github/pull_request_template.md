@@ -81,9 +81,9 @@
 
 ### CI Gates (must all be green before review is requested)
 
-- [ ] `cargo clippy --workspace --all-targets -- -D warnings` passes
+- [ ] `cargo clippy --workspace --target riscv32imac-unknown-none-elf --all-targets -- -D warnings` passes
 - [ ] `cargo fmt --check --all` passes
-- [ ] `cargo build --workspace --release` passes
+- [ ] `cargo build --workspace --target riscv32imac-unknown-none-elf --release` passes
 - [ ] `cargo xtask lint` passes (see `xtask/` for what this checks)
 - [ ] No new `#[allow(clippy::...)]` suppressions without a justifying comment
 

@@ -359,15 +359,4 @@ impl Nesso {
         let flash = self.flash.take().ok_or(NessoError::FlashUnavailable)?;
         Ok(EspFlashSettingsStore::from_flash(flash, offset))
     }
-
-    /// Consumes the facade and returns the onboard SX1262 LoRa driver.
-    ///
-    /// Prefer the [`Nesso::lora`] field. Display and LoRa now share the
-    /// documented SPI bus through BSP-owned `embedded-hal-bus` devices, so
-    /// applications no longer need to consume the facade for LoRa access.
-    #[cfg(feature = "lora")]
-    #[deprecated(note = "use the nesso.lora field; display and LoRa now share SPI safely")]
-    pub fn into_lora(self) -> Result<NessoLora, NessoError> {
-        Ok(self.lora)
-    }
 }

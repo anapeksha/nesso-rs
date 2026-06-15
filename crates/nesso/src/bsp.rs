@@ -10,13 +10,18 @@ use crate::audio::Buzzer;
 use crate::display::{
     BusConfig, Display, DisplayError, DisplayGeometry, NullOutputPin, PanelConfig,
 };
+#[cfg(feature = "env")]
+use crate::env::{EnvError, EnvMeasurement, EnvPro};
 use critical_section::Mutex;
-use embedded_hal::{delay::DelayNs, i2c::I2c};
+use embedded_hal::{
+    delay::DelayNs,
+    i2c::{ErrorKind, ErrorType, I2c, NoAcknowledgeSource, Operation},
+};
 use embedded_hal_bus::{i2c, spi};
 use esp_hal::{
     Blocking,
     delay::Delay,
-    gpio::{Level, Output, OutputConfig},
+    gpio::{DriveMode, Flex, Level, Output, OutputConfig},
     i2c::master::{Config as I2cConfig, I2c as EspI2c},
     spi::{
         Mode,
@@ -196,6 +201,9 @@ pub struct NessoN1 {
 pub type NessoRawI2c = EspI2c<'static, Blocking>;
 /// Shared I2C device type used by Nesso N1 facade helpers.
 pub type NessoI2c = i2c::CriticalSectionDevice<'static, NessoRawI2c>;
+/// Software I2C bus used to probe Grove-attached sensors on GPIO5/GPIO4.
+#[cfg(feature = "env")]
+type NessoGroveI2c = GroveI2c;
 /// Concrete blocking SPI bus type used before it is placed behind a shared bus.
 pub type NessoRawSpi = Spi<'static, Blocking>;
 /// Shared SPI device type used by Nesso N1 SPI peripherals.
@@ -206,6 +214,16 @@ pub type NessoOutput = Output<'static>;
 pub type NessoDisplay = Display<NessoSpiDevice, NessoOutput, NullOutputPin, NullOutputPin>;
 /// Concrete passive-buzzer type returned by the board support package.
 pub type NessoBuzzer = Buzzer<NessoOutput>;
+/// Board-owned ENV Pro driver selected by the board auto-detect helper.
+///
+/// `NessoN1Board::into_display_and_env()` powers the Grove rail, probes the
+/// Grove GPIO5/GPIO4 path first, then falls back to the shared Qwiic/main I2C
+/// bus. `NessoEnv` hides that transport detail and exposes a single
+/// measurement API.
+#[cfg(feature = "env")]
+pub struct NessoEnv {
+    inner: NessoEnvInner,
+}
 /// Concrete LoRa SPI-device type used by the onboard SX1262 driver.
 #[cfg(feature = "lora")]
 pub type NessoLoraSpiDevice = NessoSpiDevice;
@@ -249,6 +267,23 @@ pub struct NessoCoreParts {
     pub lora: crate::lora::NessoLora,
 }
 
+#[cfg(feature = "env")]
+impl NessoEnv {
+    /// Reads one ENV Pro sample from the detected board path.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying I2C error kind if the active Grove or Qwiic path
+    /// stops acknowledging transfers, or one of the BME688 probe/read errors
+    /// from `nesso::env` if the device responds with invalid data.
+    pub fn measure(&mut self) -> Result<EnvMeasurement, EnvError<embedded_hal::i2c::ErrorKind>> {
+        match &mut self.inner {
+            NessoEnvInner::Grove(env) => env.measure().map_err(map_env_error),
+            NessoEnvInner::Qwiic(env) => env.measure().map_err(map_env_error),
+        }
+    }
+}
+
 /// Board-owned resources for the onboard SX1262 LoRa transceiver.
 #[cfg(feature = "lora")]
 #[doc(hidden)]
@@ -264,6 +299,210 @@ pub struct LoraResources {
 /// Owns ESP-HAL peripherals before they are split into Nesso N1 services.
 pub struct NessoN1Board {
     peripherals: esp_hal::peripherals::Peripherals,
+}
+
+#[cfg(feature = "env")]
+struct GroveI2c {
+    sda: Flex<'static>,
+    scl: Flex<'static>,
+    delay: Delay,
+}
+
+#[cfg(feature = "env")]
+enum NessoEnvInner {
+    Grove(EnvPro<NessoGroveI2c, Delay>),
+    Qwiic(EnvPro<NessoI2c, Delay>),
+}
+
+#[cfg(feature = "env")]
+impl GroveI2c {
+    /// Conservative half-period for the software I2C master used on Grove.
+    const HALF_PERIOD_US: u32 = 5;
+    /// Number of clock pulses used to recover a stuck bus before probing.
+    const BUS_RECOVERY_PULSES: u8 = 9;
+
+    fn new(
+        sda: esp_hal::peripherals::GPIO5<'static>,
+        scl: esp_hal::peripherals::GPIO4<'static>,
+    ) -> Self {
+        let mut sda = Flex::new(sda);
+        let mut scl = Flex::new(scl);
+        let open_drain = OutputConfig::default().with_drive_mode(DriveMode::OpenDrain);
+
+        sda.apply_output_config(&open_drain);
+        sda.set_input_enable(true);
+        sda.set_high();
+        sda.set_output_enable(true);
+
+        scl.apply_output_config(&open_drain);
+        scl.set_input_enable(true);
+        scl.set_high();
+        scl.set_output_enable(true);
+
+        let mut bus = Self {
+            sda,
+            scl,
+            delay: Delay::new(),
+        };
+        bus.recover_bus();
+        bus
+    }
+
+    fn delay_half_period(&mut self) {
+        self.delay.delay_us(Self::HALF_PERIOD_US);
+    }
+
+    fn release_sda(&mut self) {
+        self.sda.set_high();
+    }
+
+    fn drive_sda_low(&mut self) {
+        self.sda.set_low();
+    }
+
+    fn release_scl(&mut self) {
+        self.scl.set_high();
+    }
+
+    fn drive_scl_low(&mut self) {
+        self.scl.set_low();
+    }
+
+    fn start_condition(&mut self) {
+        self.release_sda();
+        self.release_scl();
+        self.delay_half_period();
+        self.drive_sda_low();
+        self.delay_half_period();
+        self.drive_scl_low();
+        self.delay_half_period();
+    }
+
+    fn stop_condition(&mut self) {
+        self.drive_sda_low();
+        self.delay_half_period();
+        self.release_scl();
+        self.delay_half_period();
+        self.release_sda();
+        self.delay_half_period();
+    }
+
+    fn write_bit(&mut self, high: bool) {
+        if high {
+            self.release_sda();
+        } else {
+            self.drive_sda_low();
+        }
+        self.delay_half_period();
+        self.release_scl();
+        self.delay_half_period();
+        self.drive_scl_low();
+        self.delay_half_period();
+    }
+
+    fn read_bit(&mut self) -> bool {
+        self.release_sda();
+        self.delay_half_period();
+        self.release_scl();
+        self.delay_half_period();
+        let high = self.sda.is_high();
+        self.drive_scl_low();
+        self.delay_half_period();
+        high
+    }
+
+    fn write_byte(&mut self, byte: u8) -> bool {
+        for shift in (0..8).rev() {
+            self.write_bit((byte & (1u8 << shift)) != 0);
+        }
+        !self.read_bit()
+    }
+
+    fn read_byte(&mut self, acknowledge: bool) -> u8 {
+        let mut byte = 0u8;
+        for shift in (0..8).rev() {
+            if self.read_bit() {
+                byte |= 1u8 << shift;
+            }
+        }
+        self.write_bit(!acknowledge);
+        byte
+    }
+
+    fn recover_bus(&mut self) {
+        self.release_sda();
+        self.release_scl();
+        self.delay_half_period();
+
+        if self.sda.is_high() {
+            return;
+        }
+
+        for _ in 0..Self::BUS_RECOVERY_PULSES {
+            self.drive_scl_low();
+            self.delay_half_period();
+            self.release_scl();
+            self.delay_half_period();
+            if self.sda.is_high() {
+                break;
+            }
+        }
+
+        self.stop_condition();
+    }
+}
+
+#[cfg(feature = "env")]
+impl ErrorType for GroveI2c {
+    type Error = ErrorKind;
+}
+
+#[cfg(feature = "env")]
+impl I2c for GroveI2c {
+    fn transaction(
+        &mut self,
+        address: u8,
+        operations: &mut [Operation<'_>],
+    ) -> Result<(), Self::Error> {
+        if operations.is_empty() {
+            return Ok(());
+        }
+
+        let mut previous_was_read = None;
+
+        for operation in operations.iter_mut() {
+            let read_phase = matches!(operation, Operation::Read(_));
+            if previous_was_read != Some(read_phase) {
+                self.start_condition();
+                let address_byte = (address << 1) | u8::from(read_phase);
+                if !self.write_byte(address_byte) {
+                    self.stop_condition();
+                    return Err(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Address));
+                }
+                previous_was_read = Some(read_phase);
+            }
+
+            match operation {
+                Operation::Read(buffer) => {
+                    let last_index = buffer.len().saturating_sub(1);
+                    for (index, slot) in buffer.iter_mut().enumerate() {
+                        *slot = self.read_byte(index != last_index);
+                    }
+                }
+                Operation::Write(buffer) => {
+                    for &byte in *buffer {
+                        if !self.write_byte(byte) {
+                            self.stop_condition();
+                            return Err(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Data));
+                        }
+                    }
+                }
+            }
+        }
+
+        self.stop_condition();
+        Ok(())
+    }
 }
 
 impl NessoN1 {
@@ -510,6 +749,67 @@ impl NessoN1Board {
         Ok((display, i2c))
     }
 
+    /// Initializes the display and auto-detects ENV Pro on Grove first, then Qwiic.
+    #[cfg(feature = "env")]
+    pub fn into_display_and_env(self) -> Result<(NessoDisplay, NessoEnv), BoardInitError> {
+        let mut delay = Delay::new();
+        let mut raw_i2c0 = Self::configure_i2c(
+            self.peripherals.I2C0,
+            self.peripherals.GPIO10,
+            self.peripherals.GPIO8,
+        )?;
+        NessoN1::init_lcd_expander(&mut raw_i2c0, &mut delay)
+            .map_err(|_| BoardInitError::Expander)?;
+
+        let spi_bus = Self::configure_spi_bus(
+            self.peripherals.SPI2,
+            self.peripherals.GPIO20,
+            self.peripherals.GPIO21,
+            self.peripherals.GPIO22,
+        )?;
+        let display =
+            Self::configure_display(spi_bus, self.peripherals.GPIO17, self.peripherals.GPIO16)?;
+
+        configure_output(
+            &mut raw_i2c0,
+            NessoN1::GROVE_POWER_ENABLE.address.0,
+            NessoN1::GROVE_POWER_ENABLE.pin,
+        )
+        .map_err(|_| BoardInitError::Expander)?;
+        write_bit(
+            &mut raw_i2c0,
+            NessoN1::GROVE_POWER_ENABLE.address.0,
+            EXPANDER_OUTPUT_STATE,
+            NessoN1::GROVE_POWER_ENABLE.pin,
+            true,
+        )
+        .map_err(|_| BoardInitError::Expander)?;
+        delay.delay_ms(10);
+
+        let mut grove_i2c =
+            Self::configure_grove_i2c(self.peripherals.GPIO5, self.peripherals.GPIO4);
+        if EnvPro::probe(&mut grove_i2c, &mut delay).is_ok() {
+            let env = EnvPro::new(grove_i2c, Delay::new()).map_err(|_| BoardInitError::I2c)?;
+            return Ok((
+                display,
+                NessoEnv {
+                    inner: NessoEnvInner::Grove(env),
+                },
+            ));
+        }
+
+        let i2c_bus = Self::share_i2c(raw_i2c0)?;
+        let mut qwiic_i2c = i2c::CriticalSectionDevice::new(i2c_bus);
+        EnvPro::probe(&mut qwiic_i2c, &mut delay).map_err(|_| BoardInitError::I2c)?;
+        let env = EnvPro::new(qwiic_i2c, Delay::new()).map_err(|_| BoardInitError::I2c)?;
+        Ok((
+            display,
+            NessoEnv {
+                inner: NessoEnvInner::Qwiic(env),
+            },
+        ))
+    }
+
     /// Initializes the display and returns board-owned Wi-Fi resources.
     #[cfg(feature = "wifi")]
     pub fn into_display_and_wifi(
@@ -628,6 +928,14 @@ impl NessoN1Board {
         )
         .map(|i2c| i2c.with_sda(sda).with_scl(scl))
         .map_err(|_| BoardInitError::I2c)
+    }
+
+    #[cfg(feature = "env")]
+    fn configure_grove_i2c(
+        sda: esp_hal::peripherals::GPIO5<'static>,
+        scl: esp_hal::peripherals::GPIO4<'static>,
+    ) -> NessoGroveI2c {
+        GroveI2c::new(sda, scl)
     }
 
     fn share_i2c(i2c: NessoRawI2c) -> Result<&'static Mutex<RefCell<NessoRawI2c>>, BoardInitError> {
@@ -786,4 +1094,50 @@ where
         current & !mask
     };
     write_register(i2c, address, register, next)
+}
+
+/// Creates an ENV Pro driver on the shared Nesso N1 external I2C bus.
+///
+/// The helper enables the Grove sensor rail before probing the shared
+/// Qwiic/main I2C bus. Use `NessoN1Board::into_display_and_env()` when the
+/// application wants the board to auto-detect ENV Pro on Grove first and then
+/// fall back to Qwiic.
+#[cfg(feature = "env")]
+pub fn init_env_pro<I2C, Delay>(
+    mut i2c: I2C,
+    mut delay: Delay,
+) -> Result<EnvPro<I2C, Delay>, EnvError<I2C::Error>>
+where
+    I2C: I2c,
+    Delay: DelayNs,
+{
+    configure_output(
+        &mut i2c,
+        NessoN1::GROVE_POWER_ENABLE.address.0,
+        NessoN1::GROVE_POWER_ENABLE.pin,
+    )
+    .map_err(EnvError::Bus)?;
+    write_bit(
+        &mut i2c,
+        NessoN1::GROVE_POWER_ENABLE.address.0,
+        EXPANDER_OUTPUT_STATE,
+        NessoN1::GROVE_POWER_ENABLE.pin,
+        true,
+    )
+    .map_err(EnvError::Bus)?;
+    delay.delay_ms(10);
+    EnvPro::new(i2c, delay)
+}
+
+#[cfg(feature = "env")]
+fn map_env_error<E>(error: EnvError<E>) -> EnvError<embedded_hal::i2c::ErrorKind>
+where
+    E: embedded_hal::i2c::Error,
+{
+    match error {
+        EnvError::Bus(bus) => EnvError::Bus(bus.kind()),
+        EnvError::InvalidChipId(chip_id) => EnvError::InvalidChipId(chip_id),
+        EnvError::NoNewData => EnvError::NoNewData,
+        EnvError::UnsupportedVariant(variant) => EnvError::UnsupportedVariant(variant),
+    }
 }

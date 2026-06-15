@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses semantic versioning.
 
+## [0.2.0] - 2026-06-15
+
+### Added
+
+- Public facade hardening release for the single-crate `nesso` SDK.
+- Shared SPI bus ownership for display and onboard SX1262 LoRa using
+  `embedded-hal-bus`.
+- Simultaneous `nesso.display` and `nesso.lora` access when the `lora` feature
+  is enabled.
+- `dashboard` example combining landscape display output, touch, battery
+  status, and IMU reads through the unified facade.
+- Release hardware-validation documentation linked from the README.
+
+### Changed
+
+- `nesso.lora` is the non-consuming LoRa access path. The deprecated
+  `Nesso::into_lora()` compatibility method was removed before a future stable
+  API freeze.
+- README installation, examples, feature documentation, and release validation
+  commands now use the embedded ESP32-C6 target explicitly.
+
 ## [0.1.0] - 2026-06-14
 
 ### Added
@@ -21,7 +42,7 @@ and this project uses semantic versioning.
 
 - `Nesso::new` now constructs the LoRa driver as a facade field when
   `features = ["lora"]` is enabled.
-- `Nesso::into_lora()` is deprecated. Use `nesso.lora` instead.
+- `Nesso::into_lora()` was deprecated. Use `nesso.lora` instead.
 - LoRa examples use the non-consuming shared-bus API.
 - README installation, examples, and feature documentation now reflect the
   single-crate facade model.

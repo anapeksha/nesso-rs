@@ -134,11 +134,15 @@ No source lists a microphone, so microphone support remains intentionally absent
 
 Implemented: `nesso::env` supports M5Stack Unit ENV Pro U169 raw BME688
 measurements over I2C address `0x77`: temperature, humidity, pressure, and gas
-resistance.
+resistance. `NessoN1Board::into_display_and_env()` powers the Grove rail,
+probes Grove first over GPIO5/GPIO4, and falls back to the shared Qwiic/main
+I2C bus so one board-owned init path works for either attachment point on
+Nesso N1.
 
 Remaining gap: IAQ, VOC, and eCO2 estimates are not implemented because they are
-not direct BME688 register outputs. The SDK exposes raw sensor values instead of
-inventing derived air-quality values.
+not direct BME688 register outputs. Bosch provides those estimates through BSEC,
+which is covered by a separate click-through/proprietary license. The SDK
+exposes raw sensor values only.
 
 ## Motion and UI
 
