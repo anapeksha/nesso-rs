@@ -11,17 +11,18 @@ calls that automation cannot make.
 Before a PR can merge, CI runs:
 
 - `cargo fmt --check --all` — formatting
-- `cargo clippy --workspace --all-targets -- -D warnings` — lint
+- `cargo clippy -p nesso --target riscv32imac-unknown-none-elf -- -D warnings` — default-feature target lint
+- `cargo clippy -p nesso --target riscv32imac-unknown-none-elf --all-features -- -D warnings` — full-feature target lint
 - `cargo xtask lint` — AI slop pattern checks (see below)
 - `cargo doc --workspace --no-deps` with `-D warnings` — doc completeness
-- `cargo test --workspace --lib` — host-runnable tests
+- `(cd tests/host && cargo test)` — host-runnable tests
 
 If any of these fail the PR cannot merge. Do not review a PR with a red CI
 status unless you are diagnosing the failure.
 
 ---
 
-## What `cargo xtask lint` checks
+## What the xtask lint checks
 
 The xtask linter scans every `.rs` file in the workspace for:
 

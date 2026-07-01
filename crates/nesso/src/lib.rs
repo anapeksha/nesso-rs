@@ -96,11 +96,11 @@ use crate::storage::{EspFlashSettingsStore, SettingsPartition};
 use crate::touch::{Touch, TouchEvent, TouchState};
 #[cfg(feature = "wifi")]
 use crate::wifi::EspRadioWifi;
-use defmt::Format;
 use esp_hal::delay::Delay;
 
 /// SDK-level error type for facade operations.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NessoError {
     /// Board resource initialization failed.
     Board(BoardInitError),

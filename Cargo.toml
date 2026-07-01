@@ -37,7 +37,7 @@ members = [
 edition = "2024"
 license = "MIT"
 rust-version = "1.88"
-authors = ["Nesso RS Contributors"]
+authors = ["Anapeksha Mukherjee <https://github.com/anapeksha>"]
 repository = "https://github.com/anapeksha/nesso-rs"
 homepage = "https://github.com/anapeksha/nesso-rs"
 documentation = "https://docs.rs/nesso"
@@ -48,7 +48,7 @@ categories = ["embedded", "hardware-support", "no-std"]
 [workspace.dependencies]
 bmi2 = { version = "0.1.2", default-features = false }
 bt-hci = { version = "0.8.1", default-features = false }
-embedded-graphics = { version = "0.8.2", default-features = false, features = ["defmt"] }
+embedded-graphics = { version = "0.8.2", default-features = false }
 embedded-hal-bus = { version = "0.3.0", default-features = false }
 embassy-futures = { version = "0.1.2", default-features = false }
 embassy-net = { version = "0.9.1", default-features = false, features = [
@@ -93,7 +93,7 @@ esp-rtos = { version = "0.3.0", default-features = false, features = [
     "esp-radio",
     "esp32c6",
 ] }
-heapless = { version = "0.9.3", default-features = false, features = ["defmt"] }
+heapless = { version = "0.9.3", default-features = false }
 defmt = "1.1.0"
 nb = "1.1.0"
 static_cell = "2.1.1"

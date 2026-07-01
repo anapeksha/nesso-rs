@@ -1,11 +1,10 @@
 //! Motion and orientation context helpers built from accelerometer samples.
 
-use defmt::Format;
-
 use crate::imu::Acceleration;
 
 /// Dominant gravity direction inferred from an accelerometer sample.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum GravityDirection {
     /// Positive X axis has the largest magnitude.
     PositiveX,
@@ -22,7 +21,8 @@ pub enum GravityDirection {
 }
 
 /// Coarse board pose inferred from gravity.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Pose {
     /// Display is facing up.
     FaceUp,
@@ -39,7 +39,8 @@ pub enum Pose {
 }
 
 /// Coarse motion state inferred from acceleration deltas.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MotionState {
     /// Not enough samples have been observed.
     Unknown,
@@ -50,7 +51,8 @@ pub enum MotionState {
 }
 
 /// Coarse orientation family inferred from pose.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OrientationKind {
     /// Display plane is approximately horizontal.
     Flat,
@@ -61,7 +63,8 @@ pub enum OrientationKind {
 }
 
 /// Combined motion context returned by [`MotionDetector`].
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MotionContext {
     /// Current coarse motion state.
     pub state: MotionState,
@@ -72,7 +75,8 @@ pub struct MotionContext {
 }
 
 /// Tuning values for motion classification.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MotionConfig {
     /// Delta threshold in milli-g below which a sample is considered stable.
     pub still_threshold_mg: i32,
@@ -90,7 +94,8 @@ impl Default for MotionConfig {
 }
 
 /// Stateful motion classifier for BMI270 acceleration samples.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MotionDetector {
     config: MotionConfig,
     previous: Option<Acceleration>,

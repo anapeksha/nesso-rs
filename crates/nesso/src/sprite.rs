@@ -1,4 +1,3 @@
-use defmt::Format;
 use embedded_graphics::{pixelcolor::Rgb565, prelude::*, primitives::Rectangle};
 use heapless::Vec;
 
@@ -363,7 +362,8 @@ impl OriginDimensions for Sprite<'_> {
 }
 
 /// Errors returned by sprite construction and drawing.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SpriteError {
     /// The provided pixel buffer is smaller than `width * height`.
     BufferTooSmall,

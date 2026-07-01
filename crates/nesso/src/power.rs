@@ -1,4 +1,3 @@
-use defmt::Format;
 use embedded_hal::i2c::I2c;
 
 pub const BQ27220_ADDRESS: u8 = 0x55;
@@ -49,7 +48,8 @@ const AW32001_CHARGE_STATUS_MASK: u8 = 0b11;
 const AW32001_WATCHDOG_MASK: u8 = 0b11;
 const AW32001_WATCHDOG_SHIFT: u8 = 5;
 
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ChargeStatus {
     Unknown,
     Discharging,
@@ -57,14 +57,16 @@ pub enum ChargeStatus {
     Full,
 }
 
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PowerState {
     Usb,
     Battery,
     Sleep,
 }
 
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct BatteryStatus {
     pub voltage_mv: u16,
     pub current_ma: i16,
@@ -73,7 +75,8 @@ pub struct BatteryStatus {
 }
 
 /// Battery under-voltage lockout threshold for AW32001.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UnderVoltageLockout {
     Mv2430 = 0,
     Mv2490 = 1,
@@ -86,7 +89,8 @@ pub enum UnderVoltageLockout {
 }
 
 /// AW32001 charging configuration.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ChargingConfig {
     /// Charge current in mA, clamped to 8-456 mA in 8 mA steps.
     pub charge_current_ma: u16,

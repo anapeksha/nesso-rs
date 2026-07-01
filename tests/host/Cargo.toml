@@ -6,21 +6,23 @@ publish = false
 
 [workspace]
 
+[features]
+default = []
+defmt = []
+
 [lib]
 doctest = false
 
 [dependencies]
-embedded-graphics = { version = "0.8.1", default-features = false, features = ["defmt"] }
+embedded-graphics = { version = "0.8.1", default-features = false }
 embedded-hal = { version = "1.0.0", default-features = false }
 embedded-storage = "0.3.1"
-heapless = { version = "0.9.3", default-features = false, features = ["defmt"] }
+heapless = { version = "0.9.3", default-features = false }
 libm = { version = "0.2.15", default-features = false }
-defmt = "1.1.0"
-
 
 [lints.rust]
 unsafe_code = "forbid"
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(nesso_host_tests)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(nesso_host_tests)', 'cfg(feature, values("defmt"))'] }
 
 [lints.clippy]
 large_stack_frames = "deny"

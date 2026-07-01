@@ -5,7 +5,6 @@
 
 #[cfg(not(nesso_host_tests))]
 use crate::bsp::{NessoI2c, NessoLoraSpiDevice};
-use defmt::Format;
 use embedded_hal::{
     digital::InputPin,
     i2c::I2c,
@@ -92,7 +91,8 @@ const LOW_DATA_RATE_OPTIMIZE_ON: u8 = 0x01;
 const LOW_DATA_RATE_OPTIMIZE_OFF: u8 = 0x00;
 
 /// Errors returned by the SX1262 driver.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LoraError<SpiError, I2cError, PinError> {
     /// SPI transaction failed.
     Spi(SpiError),
@@ -115,7 +115,8 @@ pub enum LoraError<SpiError, I2cError, PinError> {
 }
 
 /// LoRa signal bandwidth.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Bandwidth {
     Bw7,
     Bw10,
@@ -147,7 +148,8 @@ impl Bandwidth {
 }
 
 /// LoRa coding rate.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CodingRate {
     Cr45,
     Cr46,
@@ -167,7 +169,8 @@ impl CodingRate {
 }
 
 /// SX1262 packet header mode.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HeaderMode {
     Explicit,
     Implicit,
@@ -183,7 +186,8 @@ impl HeaderMode {
 }
 
 /// LoRa PHY configuration.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LoraConfig {
     /// RF frequency in hertz. Must be in the Nesso N1 documented 850-960 MHz range.
     pub frequency_hz: u32,
@@ -238,7 +242,8 @@ impl LoraConfig {
 }
 
 /// Errors returned while validating LoRa configuration.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LoraConfigError {
     InvalidFrequency,
     InvalidSpreadingFactor,
@@ -246,7 +251,8 @@ pub enum LoraConfigError {
 }
 
 /// Packet metadata returned after receive.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PacketStatus {
     /// Packet RSSI in dBm.
     pub rssi_dbm: i16,
@@ -257,7 +263,8 @@ pub struct PacketStatus {
 }
 
 /// Receive result.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ReceivedPacket {
     /// Number of bytes copied into the caller buffer.
     pub len: usize,
@@ -266,7 +273,8 @@ pub struct ReceivedPacket {
 }
 
 /// SX1262 receive timeout.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReceiveTimeout {
     /// Continuous receive mode.
     Continuous,

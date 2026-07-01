@@ -1,4 +1,3 @@
-use defmt::Format;
 use embedded_hal::{delay::DelayNs, digital::OutputPin};
 use heapless::Deque;
 
@@ -7,7 +6,8 @@ pub const TONE_QUEUE_CAPACITY: usize = 8;
 /// Maximum tone duration recommended for responsive event-loop applications.
 pub const MAX_RECOMMENDED_TONE_DURATION_MS: u32 = 250;
 
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Tone {
     pub frequency_hz: u32,
     pub duration_ms: u32,
@@ -176,7 +176,8 @@ where
     }
 }
 
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct ActiveTone {
     tone: Tone,
     started_at_us: u64,
@@ -196,13 +197,15 @@ impl ActiveTone {
 }
 
 /// Errors returned by non-blocking audio helpers.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AudioError {
     /// The fixed-capacity tone queue is full.
     QueueFull,
 }
 
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AudioCapability {
     PassiveBuzzer,
 }

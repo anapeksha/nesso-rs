@@ -4,7 +4,6 @@
 //! application state. They are intended for small embedded screens where layout
 //! and dirty-region rendering should stay predictable.
 
-use defmt::Format;
 use embedded_graphics::{
     Drawable,
     mono_font::{MonoTextStyleBuilder, ascii::FONT_6X10},
@@ -15,7 +14,8 @@ use embedded_graphics::{
 };
 
 /// Insets applied around a rectangle.
-#[derive(Clone, Copy, Debug, Format, Default, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Insets {
     /// Left inset in pixels.
     pub left: u32,
@@ -58,7 +58,8 @@ impl Insets {
 }
 
 /// Horizontal text alignment.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TextAlign {
     /// Align text to the left edge.
     Left,
@@ -69,7 +70,8 @@ pub enum TextAlign {
 }
 
 /// Text drawing style for compact embedded UI labels.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LabelStyle {
     /// Text color.
     pub color: Rgb565,
@@ -80,7 +82,8 @@ pub struct LabelStyle {
 }
 
 /// Multi-line text drawing style.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TextBlockStyle {
     /// Text color.
     pub color: Rgb565,
@@ -129,7 +132,8 @@ impl LabelStyle {
 }
 
 /// Layout helper for a fixed-size screen.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ScreenLayout {
     bounds: Rectangle,
 }
@@ -507,7 +511,8 @@ fn angle_in_sweep(angle: i32, start: i32, end: i32, sweep: i32) -> bool {
 }
 
 /// Easing curve for simple frame-based transitions.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Easing {
     /// Linear interpolation.
     Linear,
@@ -516,7 +521,8 @@ pub enum Easing {
 }
 
 /// Integer transition helper for simple embedded animations.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Transition {
     from: i32,
     to: i32,

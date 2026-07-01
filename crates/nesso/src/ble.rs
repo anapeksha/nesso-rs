@@ -6,7 +6,6 @@
 
 #[cfg(not(any(test, nesso_host_tests)))]
 use crate::{bsp::RadioRuntimeResources, runtime};
-use defmt::Format;
 #[cfg(not(any(test, nesso_host_tests)))]
 use esp_radio::ble::{Config, controller::BleConnector};
 use heapless::{String, Vec};
@@ -27,7 +26,8 @@ pub struct BluetoothResources {
 }
 
 /// High-level state tracked by the SDK BLE wrapper.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BleState {
     /// The controller has not been initialized.
     Stopped,
@@ -36,7 +36,8 @@ pub enum BleState {
 }
 
 /// Errors returned by the Nesso BLE wrapper.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BleError {
     /// Board Bluetooth resources were already consumed.
     ResourcesUnavailable,
@@ -161,7 +162,8 @@ impl Ble {
 }
 
 /// BLE peripheral identity used by advertising and GATT host stacks.
-#[derive(Clone, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DeviceIdentity {
     name: String<32>,
 }
@@ -182,7 +184,8 @@ impl DeviceIdentity {
 }
 
 /// Builder for legacy BLE advertising data.
-#[derive(Clone, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Advertisement<const N: usize> {
     bytes: Vec<u8, N>,
 }
@@ -268,7 +271,8 @@ impl<const N: usize> Default for Advertisement<N> {
 }
 
 /// One scheduled BLE beacon payload.
-#[derive(Clone, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BeaconFrame<const N: usize> {
     advertisement: Advertisement<N>,
     scan_response: Advertisement<N>,
@@ -310,7 +314,8 @@ impl<const N: usize> BeaconFrame<N> {
 }
 
 /// Fixed-capacity BLE beacon rotation schedule.
-#[derive(Clone, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BeaconSchedule<const FRAMES: usize, const N: usize> {
     frames: Vec<BeaconFrame<N>, FRAMES>,
     cursor: usize,
@@ -373,7 +378,8 @@ impl<const FRAMES: usize, const N: usize> Default for BeaconSchedule<FRAMES, N> 
 }
 
 /// Coarse importance level for a mirrored phone notification.
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NotificationPriority {
     /// Normal notification.
     Normal,
@@ -382,7 +388,8 @@ pub enum NotificationPriority {
 }
 
 /// Fixed-capacity phone notification mirrored over BLE.
-#[derive(Clone, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MirroredNotification {
     app: String<32>,
     title: String<48>,
@@ -486,7 +493,8 @@ impl MirroredNotification {
 }
 
 /// Fixed-capacity inbox for phone notifications mirrored over BLE.
-#[derive(Clone, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NotificationMirror<const N: usize> {
     notifications: Vec<MirroredNotification, N>,
 }

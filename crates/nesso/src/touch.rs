@@ -1,4 +1,3 @@
-use defmt::Format;
 use embedded_hal::i2c::I2c;
 use heapless::Vec;
 
@@ -11,7 +10,8 @@ const REG_P1_XH: u8 = 0x03;
 const TOUCH_COUNT_MASK: u8 = 0x0f;
 const COORDINATE_HIGH_MASK: u8 = 0x0f;
 
-#[derive(Clone, Copy, Debug, Format, Default, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct TouchPoint {
     pub id: u8,
     pub x: u16,
@@ -41,7 +41,8 @@ impl TouchPoint {
     }
 }
 
-#[derive(Clone, Debug, Format, Default, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TouchState {
     pub points: Vec<TouchPoint, 2>,
 }
@@ -70,7 +71,8 @@ impl TouchState {
     }
 }
 
-#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TouchEvent {
     Pressed(TouchPoint),
     Released,
