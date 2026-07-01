@@ -48,7 +48,7 @@ categories = ["embedded", "hardware-support", "no-std"]
 [workspace.dependencies]
 bmi2 = { version = "0.1.2", default-features = false }
 bt-hci = { version = "0.8.1", default-features = false }
-embedded-graphics = { version = "0.8.1", default-features = false }
+embedded-graphics = { version = "0.8.1", default-features = false, features = ["defmt"] }
 embedded-hal-bus = { version = "0.3.0", default-features = false }
 embassy-futures = { version = "0.1.2", default-features = false }
 embassy-net = { version = "0.9.1", default-features = false, features = [
@@ -93,7 +93,8 @@ esp-rtos = { version = "0.3.0", default-features = false, features = [
     "esp-radio",
     "esp32c6",
 ] }
-heapless = { version = "0.8.0", default-features = false }
+heapless = { version = "0.9.3", default-features = false, features = ["defmt"] }
+defmt = "1.1.0"
 nb = "1.1.0"
 static_cell = "2.1.1"
 trouble-host = { version = "0.6.0", default-features = false, features = [

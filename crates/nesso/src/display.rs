@@ -1,5 +1,6 @@
 use core::convert::Infallible;
 
+use defmt::Format;
 use embedded_graphics::{
     mono_font::{MonoTextStyle, ascii::FONT_6X10},
     pixelcolor::Rgb565,
@@ -32,14 +33,14 @@ const SOFTWARE_RESET_DELAY_NS: u32 = 150_000_000;
 const SLEEP_OUT_DELAY_NS: u32 = 120_000_000;
 const DISPLAY_ON_DELAY_NS: u32 = 20_000_000;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 pub enum DisplayError<SpiError, PinError> {
     Spi(SpiError),
     Pin(PinError),
     Text,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 pub enum DisplayOrientation {
     /// Native Nesso N1 portrait orientation, 135 x 240 logical pixels.
     Portrait,
@@ -54,7 +55,7 @@ pub enum DisplayOrientation {
 /// Backwards-compatible alias for the display orientation type.
 pub type Rotation = DisplayOrientation;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 pub struct DisplayGeometry {
     pub width: u16,
     pub height: u16,
@@ -62,13 +63,13 @@ pub struct DisplayGeometry {
     pub offset_y: u16,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 pub struct BusConfig {
     pub write_hz: u32,
     pub use_dma: bool,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 pub struct PanelConfig {
     pub geometry: DisplayGeometry,
     pub invert_colors: bool,
@@ -84,7 +85,7 @@ pub struct Display<SPI, DC, RST, BL> {
     orientation: DisplayOrientation,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 struct PixelRun {
     y: i32,
     x_start: i32,
@@ -120,7 +121,7 @@ impl PixelRun {
 }
 
 #[doc(hidden)]
-#[derive(Debug)]
+#[derive(Debug, Format)]
 pub enum LcdSpiDeviceError<BusError, CsError> {
     Bus(BusError),
     ChipSelect(CsError),
@@ -668,7 +669,7 @@ impl<SPI, DC, RST, BL> OriginDimensions for Display<SPI, DC, RST, BL> {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Default, Eq, PartialEq)]
 pub struct NullOutputPin;
 
 impl embedded_hal::digital::ErrorType for NullOutputPin {
@@ -685,7 +686,7 @@ impl OutputPin for NullOutputPin {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Default, Eq, PartialEq)]
 pub struct NullSpi;
 
 impl embedded_hal::spi::ErrorType for NullSpi {

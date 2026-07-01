@@ -13,6 +13,7 @@ use crate::display::{
 #[cfg(feature = "env")]
 use crate::env::{EnvError, EnvMeasurement, EnvPro};
 use critical_section::Mutex;
+use defmt::Format;
 use embedded_hal::{
     delay::DelayNs,
     i2c::{ErrorKind, ErrorType, I2c, NoAcknowledgeSource, Operation},
@@ -34,14 +35,14 @@ use static_cell::StaticCell;
 static SPI2_BUS: StaticCell<Mutex<RefCell<NessoRawSpi>>> = StaticCell::new();
 static I2C0_BUS: StaticCell<Mutex<RefCell<NessoRawI2c>>> = StaticCell::new();
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 pub enum BoardError {
     /// A board resource was requested more than once.
     ResourceConflict,
 }
 
 /// Errors returned while constructing concrete Nesso N1 peripherals.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 pub enum BoardInitError {
     /// I2C controller setup failed.
     I2c,
@@ -79,15 +80,15 @@ pub const EXPANDER_INTERRUPT_MASK: u8 = 0x11;
 pub const EXPANDER_INTERRUPT_STATUS: u8 = 0x13;
 
 /// 7-bit I2C device address used by a board component.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 pub struct I2cAddress(pub u8);
 
 /// ESP32-C6 GPIO number used by a board signal.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 pub struct Gpio(pub u8);
 
 /// Pin exposed by one of the Nesso N1 I/O expanders.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 pub struct ExpanderPin {
     /// I2C address of the expander.
     pub address: I2cAddress,
@@ -96,7 +97,7 @@ pub struct ExpanderPin {
 }
 
 /// Current logical state of the two board buttons.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Default, Eq, PartialEq)]
 pub struct ButtonLevels {
     /// True when KEY1 is pressed.
     pub key1_pressed: bool,
@@ -107,7 +108,7 @@ pub struct ButtonLevels {
 }
 
 /// Location of a board signal.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 pub enum Signal {
     /// Signal connected directly to an ESP32-C6 GPIO.
     Native(Gpio),
@@ -153,7 +154,7 @@ pub struct DisplayConfig {
 }
 
 /// Tracks logical resource claims for board-level construction helpers.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 pub struct BoardResources {
     claimed: u32,
 }
@@ -183,7 +184,7 @@ impl Default for BoardResources {
 }
 
 /// Logical resources that should not be configured twice.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 pub enum Resource {
     /// Main I2C bus used by touch, IMU, power, and expanders.
     I2cMain = 0,
@@ -192,7 +193,7 @@ pub enum Resource {
 }
 
 /// Static Nesso N1 board description and resource claims.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 pub struct NessoN1 {
     resources: BoardResources,
 }

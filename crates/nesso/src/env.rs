@@ -7,6 +7,7 @@
 //! Sensortec's official BME68x SensorAPI. This crate keeps the implementation
 //! Rust-native and depends only on `embedded-hal`.
 
+use defmt::Format;
 use embedded_hal::{delay::DelayNs, i2c::I2c};
 
 /// Default I2C address for M5Stack Unit ENV Pro.
@@ -60,7 +61,7 @@ const GAS_LOOKUP_K2: [f32; 16] = [
 ];
 
 /// Error type returned by the ENV Pro driver.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 pub enum EnvError<E> {
     /// I2C bus operation failed.
     Bus(E),
@@ -73,7 +74,7 @@ pub enum EnvError<E> {
 }
 
 /// BME688 heater and ambient compensation configuration.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 pub struct EnvConfig {
     /// Gas heater target in degrees Celsius. Values above 400 are capped by the sensor formula.
     pub heater_temp_c: u16,
@@ -109,7 +110,7 @@ pub struct EnvPro<I2C, DELAY> {
 }
 
 /// Measurement returned by [`EnvPro`].
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, PartialEq)]
 pub struct EnvMeasurement {
     /// Temperature in degrees Celsius.
     pub temperature_c: f32,
@@ -290,7 +291,7 @@ where
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 enum Variant {
     GasLow,
     GasHigh,

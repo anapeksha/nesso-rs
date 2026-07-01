@@ -6,6 +6,7 @@ use bmi2::{
         OisRange, PerfMode, PwrCtrl,
     },
 };
+use defmt::Format;
 use embedded_hal::delay::DelayNs;
 use embedded_hal::i2c::I2c;
 
@@ -17,27 +18,27 @@ const REG_CHIP_ID: u8 = 0x00;
 const REG_ACC_DATA_X_LSB: u8 = 0x0c;
 const REG_GYR_DATA_X_LSB: u8 = 0x12;
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Default, Eq, PartialEq)]
 pub struct Acceleration {
     pub x_mg: i16,
     pub y_mg: i16,
     pub z_mg: i16,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Default, Eq, PartialEq)]
 pub struct Gyroscope {
     pub x_mdps: i32,
     pub y_mdps: i32,
     pub z_mdps: i32,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Default, PartialEq)]
 pub struct Orientation {
     pub pitch_degrees: f32,
     pub roll_degrees: f32,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 pub enum ImuError<E> {
     Bus(E),
     InvalidChipId(u8),

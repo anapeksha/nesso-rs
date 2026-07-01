@@ -1,3 +1,4 @@
+use defmt::Format;
 use heapless::{String, Vec};
 
 /// Recommended partition label for applications that provide a partition table.
@@ -18,7 +19,7 @@ pub const SETTINGS_IMAGE_LEN: usize = 256;
 pub const SETTINGS_FORMAT_VERSION: u8 = 2;
 
 /// Flash region used by a settings store.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 pub struct SettingsPartition {
     /// Human-readable partition label.
     pub label: &'static str,
@@ -38,7 +39,7 @@ impl SettingsPartition {
 }
 
 /// Errors returned by settings storage operations.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Format, Eq, PartialEq)]
 pub enum StorageError {
     /// The requested flash region is too small for the settings image.
     PartitionTooSmall,
@@ -59,7 +60,7 @@ pub enum StorageError {
 }
 
 /// One fixed-capacity settings entry.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Format, Eq, PartialEq)]
 pub struct Entry {
     /// Entry key.
     pub key: String<SETTINGS_KEY_MAX_LEN>,
@@ -68,7 +69,7 @@ pub struct Entry {
 }
 
 /// Heapless fixed-capacity key/value settings store.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Format, Default, Eq, PartialEq)]
 pub struct SettingsStore {
     entries: Vec<Entry, SETTINGS_CAPACITY>,
 }
