@@ -14,6 +14,7 @@ use embedded_graphics::{
 };
 
 /// Insets applied around a rectangle.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Insets {
     /// Left inset in pixels.
@@ -57,6 +58,7 @@ impl Insets {
 }
 
 /// Horizontal text alignment.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TextAlign {
     /// Align text to the left edge.
@@ -68,6 +70,7 @@ pub enum TextAlign {
 }
 
 /// Text drawing style for compact embedded UI labels.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LabelStyle {
     /// Text color.
@@ -79,6 +82,7 @@ pub struct LabelStyle {
 }
 
 /// Multi-line text drawing style.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TextBlockStyle {
     /// Text color.
@@ -128,6 +132,7 @@ impl LabelStyle {
 }
 
 /// Layout helper for a fixed-size screen.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ScreenLayout {
     bounds: Rectangle,
@@ -506,6 +511,7 @@ fn angle_in_sweep(angle: i32, start: i32, end: i32, sweep: i32) -> bool {
 }
 
 /// Easing curve for simple frame-based transitions.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Easing {
     /// Linear interpolation.
@@ -515,6 +521,7 @@ pub enum Easing {
 }
 
 /// Integer transition helper for simple embedded animations.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Transition {
     from: i32,

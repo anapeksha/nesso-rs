@@ -48,6 +48,7 @@ const AW32001_CHARGE_STATUS_MASK: u8 = 0b11;
 const AW32001_WATCHDOG_MASK: u8 = 0b11;
 const AW32001_WATCHDOG_SHIFT: u8 = 5;
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ChargeStatus {
     Unknown,
@@ -56,6 +57,7 @@ pub enum ChargeStatus {
     Full,
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PowerState {
     Usb,
@@ -63,6 +65,7 @@ pub enum PowerState {
     Sleep,
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct BatteryStatus {
     pub voltage_mv: u16,
@@ -72,6 +75,7 @@ pub struct BatteryStatus {
 }
 
 /// Battery under-voltage lockout threshold for AW32001.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UnderVoltageLockout {
     Mv2430 = 0,
@@ -85,6 +89,7 @@ pub enum UnderVoltageLockout {
 }
 
 /// AW32001 charging configuration.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ChargingConfig {
     /// Charge current in mA, clamped to 8-456 mA in 8 mA steps.

@@ -6,6 +6,7 @@ pub const TONE_QUEUE_CAPACITY: usize = 8;
 /// Maximum tone duration recommended for responsive event-loop applications.
 pub const MAX_RECOMMENDED_TONE_DURATION_MS: u32 = 250;
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Tone {
     pub frequency_hz: u32,
@@ -175,6 +176,7 @@ where
     }
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct ActiveTone {
     tone: Tone,
@@ -195,12 +197,14 @@ impl ActiveTone {
 }
 
 /// Errors returned by non-blocking audio helpers.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AudioError {
     /// The fixed-capacity tone queue is full.
     QueueFull,
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AudioCapability {
     PassiveBuzzer,

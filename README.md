@@ -41,14 +41,14 @@ Add the public facade crate:
 
 ```toml
 [dependencies]
-nesso = "0.2.0"
+nesso = "0.2.1"
 ```
 
 Enable Wi-Fi only for applications that use the ESP32-C6 radio:
 
 ```toml
 [dependencies]
-nesso = { version = "0.2.0", features = ["wifi"] }
+nesso = { version = "0.2.1", features = ["wifi"] }
 esp-alloc = "0.10"
 ```
 
@@ -56,14 +56,14 @@ Enable ENV Pro support only for applications that use the external unit:
 
 ```toml
 [dependencies]
-nesso = { version = "0.2.0", features = ["env"] }
+nesso = { version = "0.2.1", features = ["env"] }
 ```
 
 Enable BLE only for applications that use the ESP32-C6 Bluetooth controller:
 
 ```toml
 [dependencies]
-nesso = { version = "0.2.0", features = ["ble"] }
+nesso = { version = "0.2.1", features = ["ble"] }
 esp-alloc = "0.10"
 ```
 
@@ -72,7 +72,14 @@ transceiver:
 
 ```toml
 [dependencies]
-nesso = { version = "0.2.0", features = ["lora"] }
+nesso = { version = "0.2.1", features = ["lora"] }
+```
+
+Enable `defmt` formatting only for applications that use `defmt` logging:
+
+```toml
+[dependencies]
+nesso = { version = "0.2.1", features = ["defmt"] }
 ```
 
 ## Public Modules
@@ -220,15 +227,14 @@ Install Rust with the target specified in `rust-toolchain.toml`, then run:
 ```bash
 cargo metadata --no-deps --format-version 1
 cargo fmt --check --all
-cargo clippy --workspace --target riscv32imac-unknown-none-elf --all-targets -- -D warnings
 cargo check --workspace --target riscv32imac-unknown-none-elf
 cargo check --workspace --target riscv32imac-unknown-none-elf --all-features
-HOST_TARGET="$(rustc -vV | sed -n 's/^host: //p')"
-RUSTFLAGS="--cfg nesso_host_tests" \
-  cargo test --manifest-path tests/host/Cargo.toml --target "${HOST_TARGET}"
-RUSTFLAGS="--cfg nesso_host_tests" \
-  cargo clippy --manifest-path tests/host/Cargo.toml \
-    --target "${HOST_TARGET}" --all-targets -- -D warnings
+cargo check -p nesso --target riscv32imac-unknown-none-elf --features defmt
+cargo clippy -p nesso --target riscv32imac-unknown-none-elf -- -D warnings
+cargo clippy -p nesso --target riscv32imac-unknown-none-elf --all-features -- -D warnings
+(cd tests/host && cargo test)
+(cd tests/host && cargo clippy --all-targets -- -D warnings)
+cargo xtask lint
 cargo build --workspace --target riscv32imac-unknown-none-elf
 cargo build --workspace --target riscv32imac-unknown-none-elf --release
 ```
@@ -244,7 +250,7 @@ classification, power helpers, and generic graphics helpers.
 Build and flash an example with `espflash`:
 
 ```bash
-cargo build -p hello_world --release
+cargo build -p hello_world --target riscv32imac-unknown-none-elf --release
 espflash flash --chip esp32c6 -p /dev/cu.usbmodem1101 \
   target/riscv32imac-unknown-none-elf/release/hello_world
 ```

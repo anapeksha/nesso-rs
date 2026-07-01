@@ -91,6 +91,7 @@ const LOW_DATA_RATE_OPTIMIZE_ON: u8 = 0x01;
 const LOW_DATA_RATE_OPTIMIZE_OFF: u8 = 0x00;
 
 /// Errors returned by the SX1262 driver.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LoraError<SpiError, I2cError, PinError> {
     /// SPI transaction failed.
@@ -114,6 +115,7 @@ pub enum LoraError<SpiError, I2cError, PinError> {
 }
 
 /// LoRa signal bandwidth.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Bandwidth {
     Bw7,
@@ -146,6 +148,7 @@ impl Bandwidth {
 }
 
 /// LoRa coding rate.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CodingRate {
     Cr45,
@@ -166,6 +169,7 @@ impl CodingRate {
 }
 
 /// SX1262 packet header mode.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HeaderMode {
     Explicit,
@@ -182,6 +186,7 @@ impl HeaderMode {
 }
 
 /// LoRa PHY configuration.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LoraConfig {
     /// RF frequency in hertz. Must be in the Nesso N1 documented 850-960 MHz range.
@@ -237,6 +242,7 @@ impl LoraConfig {
 }
 
 /// Errors returned while validating LoRa configuration.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LoraConfigError {
     InvalidFrequency,
@@ -245,6 +251,7 @@ pub enum LoraConfigError {
 }
 
 /// Packet metadata returned after receive.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PacketStatus {
     /// Packet RSSI in dBm.
@@ -256,6 +263,7 @@ pub struct PacketStatus {
 }
 
 /// Receive result.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ReceivedPacket {
     /// Number of bytes copied into the caller buffer.
@@ -265,6 +273,7 @@ pub struct ReceivedPacket {
 }
 
 /// SX1262 receive timeout.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReceiveTimeout {
     /// Continuous receive mode.

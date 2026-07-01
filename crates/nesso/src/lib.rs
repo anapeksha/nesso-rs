@@ -99,6 +99,7 @@ use crate::wifi::EspRadioWifi;
 use esp_hal::delay::Delay;
 
 /// SDK-level error type for facade operations.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NessoError {
     /// Board resource initialization failed.

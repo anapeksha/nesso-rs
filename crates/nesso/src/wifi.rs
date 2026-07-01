@@ -32,6 +32,7 @@ pub type StationInterface = esp_radio::wifi::Interface<'static>;
 #[cfg(not(any(test, nesso_host_tests)))]
 pub type NetworkInterfaces = esp_radio::wifi::Interfaces<'static>;
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AuthMethod {
     /// Open network.
@@ -47,6 +48,7 @@ pub enum AuthMethod {
 }
 
 /// Access point summary returned by a station scan.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AccessPoint {
     /// Network SSID.
@@ -60,6 +62,7 @@ pub struct AccessPoint {
 }
 
 /// Information about the current station association.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ConnectedAccessPoint {
     /// Connected network SSID.
@@ -78,6 +81,7 @@ pub struct ConnectedAccessPoint {
 pub type AccessPoints = AllocVec<AccessPoint>;
 
 /// Station credentials for connecting to an access point.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Credentials {
     /// Network SSID.
@@ -116,6 +120,7 @@ impl Credentials {
 }
 
 /// Errors returned while building station credentials.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CredentialsError {
     /// SSID exceeded the 32-byte IEEE 802.11 limit.
@@ -125,6 +130,7 @@ pub enum CredentialsError {
 }
 
 /// High-level station state tracked by the SDK wrapper.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WifiState {
     /// Radio is initialized or available but not running a station operation.
@@ -167,6 +173,7 @@ pub trait WifiStation {
 }
 
 /// Errors returned by the ESP radio Wi-Fi wrapper.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EspRadioWifiError {
     /// ESP radio controller initialization failed.

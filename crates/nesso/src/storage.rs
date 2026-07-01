@@ -18,6 +18,7 @@ pub const SETTINGS_IMAGE_LEN: usize = 256;
 pub const SETTINGS_FORMAT_VERSION: u8 = 2;
 
 /// Flash region used by a settings store.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SettingsPartition {
     /// Human-readable partition label.
@@ -38,6 +39,7 @@ impl SettingsPartition {
 }
 
 /// Errors returned by settings storage operations.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StorageError {
     /// The requested flash region is too small for the settings image.
@@ -59,6 +61,7 @@ pub enum StorageError {
 }
 
 /// One fixed-capacity settings entry.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Entry {
     /// Entry key.
@@ -68,6 +71,7 @@ pub struct Entry {
 }
 
 /// Heapless fixed-capacity key/value settings store.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SettingsStore {
     entries: Vec<Entry, SETTINGS_CAPACITY>,

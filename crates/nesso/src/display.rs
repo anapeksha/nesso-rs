@@ -32,6 +32,7 @@ const SOFTWARE_RESET_DELAY_NS: u32 = 150_000_000;
 const SLEEP_OUT_DELAY_NS: u32 = 120_000_000;
 const DISPLAY_ON_DELAY_NS: u32 = 20_000_000;
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DisplayError<SpiError, PinError> {
     Spi(SpiError),
@@ -39,6 +40,7 @@ pub enum DisplayError<SpiError, PinError> {
     Text,
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DisplayOrientation {
     /// Native Nesso N1 portrait orientation, 135 x 240 logical pixels.
@@ -54,6 +56,7 @@ pub enum DisplayOrientation {
 /// Backwards-compatible alias for the display orientation type.
 pub type Rotation = DisplayOrientation;
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DisplayGeometry {
     pub width: u16,
@@ -62,12 +65,14 @@ pub struct DisplayGeometry {
     pub offset_y: u16,
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct BusConfig {
     pub write_hz: u32,
     pub use_dma: bool,
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PanelConfig {
     pub geometry: DisplayGeometry,
@@ -84,6 +89,7 @@ pub struct Display<SPI, DC, RST, BL> {
     orientation: DisplayOrientation,
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct PixelRun {
     y: i32,
@@ -120,6 +126,7 @@ impl PixelRun {
 }
 
 #[doc(hidden)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug)]
 pub enum LcdSpiDeviceError<BusError, CsError> {
     Bus(BusError),
@@ -668,6 +675,7 @@ impl<SPI, DC, RST, BL> OriginDimensions for Display<SPI, DC, RST, BL> {
     }
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct NullOutputPin;
 
@@ -685,6 +693,7 @@ impl OutputPin for NullOutputPin {
     }
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct NullSpi;
 

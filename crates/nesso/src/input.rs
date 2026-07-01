@@ -1,3 +1,4 @@
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ButtonEvent {
     Pressed,
@@ -10,6 +11,7 @@ pub enum ButtonEvent {
     Repeat,
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ButtonTiming {
     pub debounce_ms: u32,
@@ -29,6 +31,7 @@ impl Default for ButtonTiming {
     }
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Button {
     pressed: bool,
@@ -100,6 +103,7 @@ impl Button {
 }
 
 /// Generic touch gesture emitted by a touch event tracker.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Gesture {
     /// Touch went down.
@@ -115,6 +119,7 @@ pub enum Gesture {
 }
 
 /// Configurable touch gesture thresholds.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TouchTiming {
     /// Maximum movement in pixels still considered a tap.
@@ -133,6 +138,7 @@ impl Default for TouchTiming {
 }
 
 /// Stateful generic touch gesture helper.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TouchGesture {
     timing: TouchTiming,

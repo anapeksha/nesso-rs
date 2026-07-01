@@ -17,6 +17,7 @@ const REG_CHIP_ID: u8 = 0x00;
 const REG_ACC_DATA_X_LSB: u8 = 0x0c;
 const REG_GYR_DATA_X_LSB: u8 = 0x12;
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Acceleration {
     pub x_mg: i16,
@@ -24,6 +25,7 @@ pub struct Acceleration {
     pub z_mg: i16,
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Gyroscope {
     pub x_mdps: i32,
@@ -31,12 +33,14 @@ pub struct Gyroscope {
     pub z_mdps: i32,
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Orientation {
     pub pitch_degrees: f32,
     pub roll_degrees: f32,
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ImuError<E> {
     Bus(E),

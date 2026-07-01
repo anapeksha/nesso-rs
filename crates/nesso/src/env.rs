@@ -60,6 +60,7 @@ const GAS_LOOKUP_K2: [f32; 16] = [
 ];
 
 /// Error type returned by the ENV Pro driver.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EnvError<E> {
     /// I2C bus operation failed.
@@ -73,6 +74,7 @@ pub enum EnvError<E> {
 }
 
 /// BME688 heater and ambient compensation configuration.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct EnvConfig {
     /// Gas heater target in degrees Celsius. Values above 400 are capped by the sensor formula.
@@ -109,6 +111,7 @@ pub struct EnvPro<I2C, DELAY> {
 }
 
 /// Measurement returned by [`EnvPro`].
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnvMeasurement {
     /// Temperature in degrees Celsius.
@@ -290,6 +293,7 @@ where
     }
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Variant {
     GasLow,

@@ -362,6 +362,7 @@ impl OriginDimensions for Sprite<'_> {
 }
 
 /// Errors returned by sprite construction and drawing.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SpriteError {
     /// The provided pixel buffer is smaller than `width * height`.

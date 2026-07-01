@@ -3,6 +3,7 @@
 use crate::imu::Acceleration;
 
 /// Dominant gravity direction inferred from an accelerometer sample.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum GravityDirection {
     /// Positive X axis has the largest magnitude.
@@ -20,6 +21,7 @@ pub enum GravityDirection {
 }
 
 /// Coarse board pose inferred from gravity.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Pose {
     /// Display is facing up.
@@ -37,6 +39,7 @@ pub enum Pose {
 }
 
 /// Coarse motion state inferred from acceleration deltas.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MotionState {
     /// Not enough samples have been observed.
@@ -48,6 +51,7 @@ pub enum MotionState {
 }
 
 /// Coarse orientation family inferred from pose.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OrientationKind {
     /// Display plane is approximately horizontal.
@@ -59,6 +63,7 @@ pub enum OrientationKind {
 }
 
 /// Combined motion context returned by [`MotionDetector`].
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MotionContext {
     /// Current coarse motion state.
@@ -70,6 +75,7 @@ pub struct MotionContext {
 }
 
 /// Tuning values for motion classification.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MotionConfig {
     /// Delta threshold in milli-g below which a sample is considered stable.
@@ -88,6 +94,7 @@ impl Default for MotionConfig {
 }
 
 /// Stateful motion classifier for BMI270 acceleration samples.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MotionDetector {
     config: MotionConfig,

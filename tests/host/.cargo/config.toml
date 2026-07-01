@@ -1,0 +1,2 @@
+[build]
+rustflags = ["--cfg", "nesso_host_tests"]
