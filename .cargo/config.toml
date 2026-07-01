@@ -1,6 +1,17 @@
 [target.riscv32imac-unknown-none-elf]
 rustflags = ["-C", "link-arg=-Tlinkall.x"]
 
+[env]
+DEFMT_LOG="info"
+
+[build]
+rustflags = [
+  "-C", "force-frame-pointers",
+  "-Z", "stack-protector=all",
+]
+
+target = "riscv32imac-unknown-none-elf"
+
 [unstable]
 build-std = ["core", "alloc"]
 
