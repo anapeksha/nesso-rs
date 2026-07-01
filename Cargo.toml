@@ -48,7 +48,7 @@ categories = ["embedded", "hardware-support", "no-std"]
 [workspace.dependencies]
 bmi2 = { version = "0.1.2", default-features = false }
 bt-hci = { version = "0.8.1", default-features = false }
-embedded-graphics = { version = "0.8.1", default-features = false, features = ["defmt"] }
+embedded-graphics = { version = "0.8.2", default-features = false, features = ["defmt"] }
 embedded-hal-bus = { version = "0.3.0", default-features = false }
 embassy-futures = { version = "0.1.2", default-features = false }
 embassy-net = { version = "0.9.1", default-features = false, features = [
