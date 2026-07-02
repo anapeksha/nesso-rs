@@ -13,6 +13,9 @@ pub mod display;
 #[path = "../../../crates/nesso/src/touch.rs"]
 pub mod touch;
 
+#[path = "../../../crates/nesso/src/env.rs"]
+pub mod env;
+
 #[path = "../../../crates/nesso/src/sprite.rs"]
 pub mod sprite;
 

@@ -40,7 +40,23 @@ fn init_env_and_loop(mut display: NessoDisplay, env: NessoEnv) -> ! {
 fn read_loop(mut display: NessoDisplay, mut env: NessoEnv) -> ! {
     let mut delay = Delay::new();
     loop {
-        let measurement = match env.measure() {
+        let ready_after_us = match env.start_measurement() {
+            Ok(ready_after_us) => ready_after_us,
+            Err(_) => {
+                show_status(&mut display, "ENV Pro", "Start error", Rgb565::RED);
+                delay.delay_ms(1000);
+                continue;
+            }
+        };
+
+        let mut elapsed_us = 0;
+        while elapsed_us < ready_after_us {
+            show_status(&mut display, "ENV Pro", "Measuring", Rgb565::YELLOW);
+            delay.delay_ms(20);
+            elapsed_us = elapsed_us.saturating_add(20_000);
+        }
+
+        let measurement = match env.read_measurement() {
             Ok(measurement) => measurement,
             Err(_) => {
                 show_status(&mut display, "ENV Pro", "Read error", Rgb565::RED);
