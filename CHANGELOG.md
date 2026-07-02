@@ -5,31 +5,41 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses semantic versioning.
 
-## [0.2.1] - 2026-07-02
+## [0.2.2] - 2026-07-02
 
 ### Added
 
+- Nonblocking ENV Pro forced-measurement API:
+  `EnvPro::start_measurement`, `EnvPro::read_measurement`,
+  `EnvPro::poll_measurement`, and `EnvPro::measurement_state`.
+- `EnvMeasurementState` for caller-owned ENV Pro measurement state machines.
+- Matching nonblocking methods on board-owned `bsp::NessoEnv`.
 - Optional `defmt` feature for `defmt::Format` implementations on BSP value
   and error types.
 - Explicit crate author metadata for Anapeksha Mukherjee.
-- `RELEASE.md` with v0.2.1 release notes, validation commands, and publishing
+- `RELEASE.md` with v0.2.2 release notes, validation commands, and publishing
   checklist.
 
 ### Changed
 
+- `EnvPro::measure()` now uses the new start/wait/read pieces while preserving
+  existing blocking behavior.
+- `env_pro_test` now demonstrates the nonblocking ENV Pro measurement flow.
 - `defmt` support is no longer enabled by default.
 - `embedded-graphics` and `heapless` no longer enable their `defmt` features
   unless the `nesso` `defmt` feature is enabled.
 - The `nesso` `defmt` feature now propagates to supported dependency-level
   `defmt` features for HAL, bus, radio, runtime, storage, graphics, and
   heapless types.
-- README installation snippets now reference `nesso = "0.2.1"`.
+- README installation snippets now reference `nesso = "0.2.2"`.
 - Review and release validation commands now use explicit ESP32-C6 target
   checks and host-test commands.
 - `libm` was updated to `0.2.16`.
 
 ### Fixed
 
+- ENV Pro reads no longer require applications to block for the full
+  heater/conversion window in a single call.
 - Host tests now compile without requiring `defmt`.
 - `cargo xtask lint` runs on the host target instead of inheriting the ESP32-C6
   build target.

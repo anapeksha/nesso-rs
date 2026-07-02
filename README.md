@@ -41,14 +41,14 @@ Add the public facade crate:
 
 ```toml
 [dependencies]
-nesso = "0.2.1"
+nesso = "0.2.2"
 ```
 
 Enable Wi-Fi only for applications that use the ESP32-C6 radio:
 
 ```toml
 [dependencies]
-nesso = { version = "0.2.1", features = ["wifi"] }
+nesso = { version = "0.2.2", features = ["wifi"] }
 esp-alloc = "0.10"
 ```
 
@@ -56,14 +56,14 @@ Enable ENV Pro support only for applications that use the external unit:
 
 ```toml
 [dependencies]
-nesso = { version = "0.2.1", features = ["env"] }
+nesso = { version = "0.2.2", features = ["env"] }
 ```
 
 Enable BLE only for applications that use the ESP32-C6 Bluetooth controller:
 
 ```toml
 [dependencies]
-nesso = { version = "0.2.1", features = ["ble"] }
+nesso = { version = "0.2.2", features = ["ble"] }
 esp-alloc = "0.10"
 ```
 
@@ -72,14 +72,14 @@ transceiver:
 
 ```toml
 [dependencies]
-nesso = { version = "0.2.1", features = ["lora"] }
+nesso = { version = "0.2.2", features = ["lora"] }
 ```
 
 Enable `defmt` formatting only for applications that use `defmt` logging:
 
 ```toml
 [dependencies]
-nesso = { version = "0.2.1", features = ["defmt"] }
+nesso = { version = "0.2.2", features = ["defmt"] }
 ```
 
 ## Public Modules

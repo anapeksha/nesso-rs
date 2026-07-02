@@ -95,6 +95,20 @@ impl Default for EnvConfig {
     }
 }
 
+/// Current forced-measurement state for [`EnvPro`].
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EnvMeasurementState {
+    /// No forced-mode measurement is pending.
+    Idle,
+    /// A forced-mode measurement was started and should be read after this
+    /// conversion window has elapsed.
+    Measuring {
+        /// Required elapsed time after `start_measurement`, in microseconds.
+        ready_after_us: u32,
+    },
+}
+
 /// M5Stack Unit ENV Pro environmental sensor.
 ///
 /// This wrapper exposes raw BME688 environmental readings: temperature,
@@ -108,6 +122,7 @@ pub struct EnvPro<I2C, DELAY> {
     config: EnvConfig,
     variant: Variant,
     calib: Calibration,
+    measurement_state: EnvMeasurementState,
 }
 
 /// Measurement returned by [`EnvPro`].
@@ -167,6 +182,7 @@ where
             config,
             variant: Variant::GasLow,
             calib: Calibration::default(),
+            measurement_state: EnvMeasurementState::Idle,
         };
         sensor.init()?;
         Ok(sensor)
@@ -174,29 +190,57 @@ where
 
     /// Takes one forced-mode environmental measurement.
     pub fn measure(&mut self) -> Result<EnvMeasurement, EnvError<I2C::Error>> {
-        self.set_op_mode(SLEEP_MODE)?;
-        self.write_reg(REG_CTRL_HUM, OS_HUM_X16)?;
-        self.write_reg(REG_CTRL_MEAS, ctrl_meas(FORCED_MODE))?;
+        let wait_us = self.start_measurement()?;
+        self.delay.delay_us(wait_us);
+        self.read_measurement()
+    }
 
-        self.delay
-            .delay_us(measurement_delay_us(self.config.heater_duration_ms));
-        let raw = self.read_field()?;
-        let mut calib = self.calib;
-        let temperature_c = calc_temperature(raw.temperature_adc, &mut calib);
-        let pressure_hpa = calc_pressure(raw.pressure_adc, &calib) / 100.0;
-        let humidity_percent = calc_humidity(raw.humidity_adc, &calib);
-        let gas_resistance_ohm = raw.gas.map(|gas| match self.variant {
-            Variant::GasLow => calc_gas_resistance_low(gas.adc, gas.range, &calib),
-            Variant::GasHigh => calc_gas_resistance_high(gas.adc, gas.range),
-        });
-        self.calib.t_fine = calib.t_fine;
+    /// Starts one forced-mode environmental measurement and returns the
+    /// required conversion wait in microseconds.
+    ///
+    /// Call [`EnvPro::read_measurement`] after at least this many microseconds
+    /// have elapsed. This method configures the sensor and returns immediately
+    /// instead of waiting for the heater/conversion window.
+    pub fn start_measurement(&mut self) -> Result<u32, EnvError<I2C::Error>> {
+        let ready_after_us = self.begin_forced_measurement()?;
+        self.measurement_state = EnvMeasurementState::Measuring { ready_after_us };
+        Ok(ready_after_us)
+    }
 
-        Ok(EnvMeasurement {
-            temperature_c,
-            humidity_percent,
-            pressure_hpa,
-            gas_resistance_ohm,
-        })
+    /// Reads and compensates a completed forced-mode measurement.
+    ///
+    /// Unlike [`EnvPro::measure`], this avoids the heater/conversion wait and
+    /// only checks the BME688 `NEW_DATA` flag with a bounded immediate retry.
+    /// Returns [`EnvError::NoNewData`] if the field is not ready.
+    pub fn read_measurement(&mut self) -> Result<EnvMeasurement, EnvError<I2C::Error>> {
+        let measurement = self.read_completed_measurement();
+        self.measurement_state = EnvMeasurementState::Idle;
+        measurement
+    }
+
+    /// Polls a pending forced-mode measurement with caller-tracked elapsed
+    /// time.
+    ///
+    /// Returns `Ok(None)` until `elapsed_us` reaches the `ready_after_us` value
+    /// returned by [`EnvPro::start_measurement`]. Once ready, this method reads
+    /// once and returns `Ok(Some(measurement))`.
+    pub fn poll_measurement(
+        &mut self,
+        elapsed_us: u32,
+    ) -> Result<Option<EnvMeasurement>, EnvError<I2C::Error>> {
+        match self.measurement_state {
+            EnvMeasurementState::Idle => self.read_measurement().map(Some),
+            EnvMeasurementState::Measuring { ready_after_us } if elapsed_us < ready_after_us => {
+                Ok(None)
+            }
+            EnvMeasurementState::Measuring { .. } => self.read_measurement().map(Some),
+        }
+    }
+
+    /// Returns the current forced-measurement state.
+    #[must_use]
+    pub const fn measurement_state(&self) -> EnvMeasurementState {
+        self.measurement_state
     }
 
     /// Releases the wrapped I2C bus and delay provider.
@@ -241,6 +285,13 @@ where
         self.write_reg(REG_CTRL_GAS_1, ctrl_gas[1])
     }
 
+    fn begin_forced_measurement(&mut self) -> Result<u32, EnvError<I2C::Error>> {
+        self.set_op_mode(SLEEP_MODE)?;
+        self.write_reg(REG_CTRL_HUM, OS_HUM_X16)?;
+        self.write_reg(REG_CTRL_MEAS, ctrl_meas(FORCED_MODE))?;
+        Ok(measurement_delay_us(self.config.heater_duration_ms))
+    }
+
     fn set_op_mode(&mut self, mode: u8) -> Result<(), EnvError<I2C::Error>> {
         loop {
             let ctrl_meas = self.read_reg(REG_CTRL_MEAS)?;
@@ -254,14 +305,33 @@ where
         }
     }
 
-    fn read_field(&mut self) -> Result<RawMeasurement, EnvError<I2C::Error>> {
+    fn read_completed_measurement(&mut self) -> Result<EnvMeasurement, EnvError<I2C::Error>> {
+        let raw = self.read_completed_field()?;
+        let mut calib = self.calib;
+        let temperature_c = calc_temperature(raw.temperature_adc, &mut calib);
+        let pressure_hpa = calc_pressure(raw.pressure_adc, &calib) / 100.0;
+        let humidity_percent = calc_humidity(raw.humidity_adc, &calib);
+        let gas_resistance_ohm = raw.gas.map(|gas| match self.variant {
+            Variant::GasLow => calc_gas_resistance_low(gas.adc, gas.range, &calib),
+            Variant::GasHigh => calc_gas_resistance_high(gas.adc, gas.range),
+        });
+        self.calib.t_fine = calib.t_fine;
+
+        Ok(EnvMeasurement {
+            temperature_c,
+            humidity_percent,
+            pressure_hpa,
+            gas_resistance_ohm,
+        })
+    }
+
+    fn read_completed_field(&mut self) -> Result<RawMeasurement, EnvError<I2C::Error>> {
         let mut field = [0; FIELD_LEN];
         for _ in 0..5 {
             self.read_regs(REG_FIELD0, &mut field)?;
             if field[0] & NEW_DATA_MSK != 0 {
                 return Ok(RawMeasurement::from_field(&field, self.variant));
             }
-            self.delay.delay_us(PERIOD_POLL_US);
         }
         Err(EnvError::NoNewData)
     }
@@ -442,10 +512,10 @@ fn set_bits(register: u8, mask: u8, shift: u8, value: u8) -> u8 {
     (register & !mask) | ((value << shift) & mask)
 }
 
-fn measurement_delay_us(heater_duration_ms: u16) -> u32 {
+const fn measurement_delay_us(heater_duration_ms: u16) -> u32 {
     let oversample_cycles = 2 + 1 + 16;
     let tph_duration_us = oversample_cycles * 1_963 + 477 * 9 + 1_000;
-    tph_duration_us + u32::from(heater_duration_ms) * 1_000
+    tph_duration_us + heater_duration_ms as u32 * 1_000
 }
 
 fn calc_temperature(temp_adc: u32, calib: &mut Calibration) -> f32 {

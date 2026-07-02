@@ -1,11 +1,13 @@
 use core::convert::Infallible;
 
 use embedded_hal::{
+    delay::DelayNs,
     digital::{ErrorType as DigitalErrorType, OutputPin},
     i2c::{ErrorType as I2cErrorType, I2c, Operation},
 };
 use nesso_host_tests::{
-    audio::{AudioError, Buzzer, TONE_QUEUE_CAPACITY, Tone},
+    audio::{AudioError, Buzzer, Tone, TONE_QUEUE_CAPACITY},
+    env::{EnvConfig, EnvError, EnvMeasurementState, EnvPro, ENV_PRO_I2C_ADDRESS},
     power::{ChargeStatus, Power},
     touch::{Touch, TouchEvent, TouchPoint},
 };
@@ -61,7 +63,10 @@ fn queued_buzzer_is_non_blocking_and_reports_capacity() -> Result<(), String> {
             .enqueue(Tone::new(2_000, 1))
             .map_err(|error| format!("{error:?}"))?;
     }
-    assert_eq!(buzzer.enqueue(Tone::new(2_000, 1)), Err(AudioError::QueueFull));
+    assert_eq!(
+        buzzer.enqueue(Tone::new(2_000, 1)),
+        Err(AudioError::QueueFull)
+    );
     Ok(())
 }
 
@@ -209,5 +214,173 @@ fn power_driver_reads_battery_and_charge_status() -> Result<(), String> {
     assert_eq!(status.current_ma, -42);
     assert_eq!(status.percentage, 50);
     assert_eq!(status.charge, ChargeStatus::Charging);
+    Ok(())
+}
+
+#[derive(Clone, Debug)]
+struct FakeEnvI2c {
+    registers: [u8; 256],
+    field: [u8; 17],
+    field_new_data: bool,
+    field_reads: u8,
+}
+
+impl FakeEnvI2c {
+    fn new() -> Self {
+        let mut registers = [0; 256];
+        registers[0xd0] = 0x61;
+        registers[0xf0] = 0;
+        Self {
+            registers,
+            field: [
+                0x80, 0x00, 0x65, 0x43, 0x20, 0x54, 0x32, 0x10, 0x12, 0x34, 0x00, 0x00, 0x00, 0x20,
+                0x70, 0x00, 0x00,
+            ],
+            field_new_data: false,
+            field_reads: 0,
+        }
+    }
+}
+
+impl I2cErrorType for FakeEnvI2c {
+    type Error = Infallible;
+}
+
+impl I2c for FakeEnvI2c {
+    fn transaction(
+        &mut self,
+        address: u8,
+        operations: &mut [Operation<'_>],
+    ) -> Result<(), Self::Error> {
+        assert_eq!(address, ENV_PRO_I2C_ADDRESS);
+        let mut register = 0;
+        for operation in operations {
+            match operation {
+                Operation::Write(bytes) => {
+                    if let Some(first) = bytes.first() {
+                        register = *first;
+                    }
+                    if bytes.len() >= 2 {
+                        self.registers[usize::from(bytes[0])] = bytes[1];
+                    }
+                }
+                Operation::Read(bytes) => {
+                    if register == 0x1d {
+                        self.field_reads = self.field_reads.saturating_add(1);
+                        let mut field = self.field;
+                        if !self.field_new_data {
+                            field[0] &= !0x80;
+                        }
+                        bytes.copy_from_slice(&field[..bytes.len()]);
+                    } else {
+                        for (index, byte) in bytes.iter_mut().enumerate() {
+                            *byte = self.registers[usize::from(register).saturating_add(index)];
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct FakeDelay {
+    delayed_us: u64,
+}
+
+impl DelayNs for FakeDelay {
+    fn delay_ns(&mut self, ns: u32) {
+        self.delayed_us = self.delayed_us.saturating_add(u64::from(ns / 1_000));
+    }
+
+    fn delay_us(&mut self, us: u32) {
+        self.delayed_us = self.delayed_us.saturating_add(u64::from(us));
+    }
+}
+
+fn env_sensor(config: EnvConfig) -> Result<EnvPro<FakeEnvI2c, FakeDelay>, String> {
+    EnvPro::with_config(FakeEnvI2c::new(), FakeDelay::default(), config)
+        .map_err(|error| format!("{error:?}"))
+}
+
+#[test]
+fn env_measurement_delay_includes_heater_time() -> Result<(), String> {
+    let mut env = env_sensor(EnvConfig {
+        heater_duration_ms: 42,
+        ..EnvConfig::default()
+    })?;
+
+    let ready_after_us = env
+        .start_measurement()
+        .map_err(|error| format!("{error:?}"))?;
+
+    assert_eq!(ready_after_us, 42_590 + 42_000);
+    assert_eq!(
+        env.measurement_state(),
+        EnvMeasurementState::Measuring { ready_after_us }
+    );
+    Ok(())
+}
+
+#[test]
+fn env_poll_measurement_waits_until_ready() -> Result<(), String> {
+    let mut env = env_sensor(EnvConfig {
+        heater_duration_ms: 1,
+        ..EnvConfig::default()
+    })?;
+    let ready_after_us = env
+        .start_measurement()
+        .map_err(|error| format!("{error:?}"))?;
+
+    assert_eq!(
+        env.poll_measurement(ready_after_us - 1)
+            .map_err(|error| format!("{error:?}"))?,
+        None
+    );
+    assert_eq!(env.release().0.field_reads, 0);
+    Ok(())
+}
+
+#[test]
+fn env_poll_measurement_reads_once_after_ready() -> Result<(), String> {
+    let mut sensor = FakeEnvI2c::new();
+    sensor.field_new_data = true;
+    let mut env = EnvPro::with_config(
+        sensor,
+        FakeDelay::default(),
+        EnvConfig {
+            heater_duration_ms: 1,
+            ..EnvConfig::default()
+        },
+    )
+    .map_err(|error| format!("{error:?}"))?;
+    let ready_after_us = env
+        .start_measurement()
+        .map_err(|error| format!("{error:?}"))?;
+
+    let measurement = env
+        .poll_measurement(ready_after_us)
+        .map_err(|error| format!("{error:?}"))?;
+    assert!(measurement.is_some());
+    assert_eq!(env.measurement_state(), EnvMeasurementState::Idle);
+    assert_eq!(env.release().0.field_reads, 1);
+    Ok(())
+}
+
+#[test]
+fn env_read_measurement_returns_no_new_data_without_blocking() -> Result<(), String> {
+    let mut env = env_sensor(EnvConfig::default())?;
+    let ready_after_us = env
+        .start_measurement()
+        .map_err(|error| format!("{error:?}"))?;
+
+    assert_eq!(
+        env.poll_measurement(ready_after_us),
+        Err(EnvError::NoNewData)
+    );
+    let (i2c, delay) = env.release();
+    assert_eq!(i2c.field_reads, 5);
+    assert_eq!(delay.delayed_us, 10_000);
     Ok(())
 }

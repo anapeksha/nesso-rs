@@ -11,7 +11,7 @@ use crate::display::{
     BusConfig, Display, DisplayError, DisplayGeometry, NullOutputPin, PanelConfig,
 };
 #[cfg(feature = "env")]
-use crate::env::{EnvError, EnvMeasurement, EnvPro};
+use crate::env::{EnvError, EnvMeasurement, EnvMeasurementState, EnvPro};
 use critical_section::Mutex;
 #[cfg(feature = "env")]
 use embedded_hal::i2c::{ErrorKind, ErrorType, NoAcknowledgeSource, Operation};
@@ -280,6 +280,45 @@ pub struct NessoCoreParts {
 
 #[cfg(feature = "env")]
 impl NessoEnv {
+    /// Starts one forced-mode ENV Pro measurement and returns the required wait
+    /// in microseconds.
+    pub fn start_measurement(&mut self) -> Result<u32, EnvError<embedded_hal::i2c::ErrorKind>> {
+        match &mut self.inner {
+            NessoEnvInner::Grove(env) => env.start_measurement().map_err(map_env_error),
+            NessoEnvInner::Qwiic(env) => env.start_measurement().map_err(map_env_error),
+        }
+    }
+
+    /// Reads and compensates a completed forced-mode ENV Pro measurement.
+    pub fn read_measurement(
+        &mut self,
+    ) -> Result<EnvMeasurement, EnvError<embedded_hal::i2c::ErrorKind>> {
+        match &mut self.inner {
+            NessoEnvInner::Grove(env) => env.read_measurement().map_err(map_env_error),
+            NessoEnvInner::Qwiic(env) => env.read_measurement().map_err(map_env_error),
+        }
+    }
+
+    /// Polls a pending ENV Pro measurement using caller-tracked elapsed time.
+    pub fn poll_measurement(
+        &mut self,
+        elapsed_us: u32,
+    ) -> Result<Option<EnvMeasurement>, EnvError<embedded_hal::i2c::ErrorKind>> {
+        match &mut self.inner {
+            NessoEnvInner::Grove(env) => env.poll_measurement(elapsed_us).map_err(map_env_error),
+            NessoEnvInner::Qwiic(env) => env.poll_measurement(elapsed_us).map_err(map_env_error),
+        }
+    }
+
+    /// Returns the current forced-measurement state.
+    #[must_use]
+    pub fn measurement_state(&self) -> EnvMeasurementState {
+        match &self.inner {
+            NessoEnvInner::Grove(env) => env.measurement_state(),
+            NessoEnvInner::Qwiic(env) => env.measurement_state(),
+        }
+    }
+
     /// Reads one ENV Pro sample from the detected board path.
     ///
     /// # Errors
