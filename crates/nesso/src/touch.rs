@@ -1,3 +1,15 @@
+//! FT6336U touch controller support.
+//!
+//! The high-level facade keeps the previous touch state for event polling, and
+//! raw [`TouchState`] values can be mapped through display orientation helpers.
+//!
+//! ```rust,ignore
+//! let state = nesso.touch_state()?;
+//! if let Some(point) = state.primary() {
+//!     let point = point.oriented(nesso.display.geometry(), nesso.display.orientation());
+//! }
+//! ```
+
 use embedded_hal::i2c::I2c;
 use heapless::Vec;
 

@@ -3,6 +3,10 @@
 //! The helpers operate on any `embedded-graphics` draw target and do not own
 //! application state. They are intended for small embedded screens where layout
 //! and dirty-region rendering should stay predictable.
+//!
+//! ```rust,ignore
+//! nesso::ui::draw_black_dither_veil(&mut display, area, nesso::ui::DitherPattern::Checker50)?;
+//! ```
 
 use embedded_graphics::{
     Drawable,
@@ -91,6 +95,180 @@ pub struct TextBlockStyle {
     pub background: Option<Rgb565>,
     /// Space between text baselines in pixels.
     pub line_height: u32,
+}
+
+/// Ordered dither pattern used for faux translucency on RGB565 targets.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DitherPattern {
+    /// Draw one quarter of pixels.
+    Sparse25,
+    /// Draw half the pixels in a checkerboard pattern.
+    Checker50,
+    /// Draw roughly three quarters of pixels.
+    Dense75,
+    /// Draw every fourth vertical column.
+    Vertical25,
+    /// Draw alternating vertical columns.
+    Vertical50,
+}
+
+impl DitherPattern {
+    /// Returns true when a pixel at `point` should be filled.
+    #[must_use]
+    pub const fn covers(self, point: Point) -> bool {
+        match self {
+            Self::Sparse25 => ((point.x + point.y) & 0b11) == 0,
+            Self::Checker50 => ((point.x ^ point.y) & 1) == 0,
+            Self::Dense75 => ((point.x + point.y) & 0b11) != 0,
+            Self::Vertical25 => (point.x & 0b11) == 0,
+            Self::Vertical50 => (point.x & 1) == 0,
+        }
+    }
+}
+
+/// Caller-owned circular graph series buffer.
+pub struct GraphSeriesBuffer<'a> {
+    values: &'a mut [f32],
+    start: usize,
+    len: usize,
+}
+
+impl<'a> GraphSeriesBuffer<'a> {
+    /// Creates an empty graph series backed by caller-owned storage.
+    pub fn new(values: &'a mut [f32]) -> Self {
+        Self {
+            values,
+            start: 0,
+            len: 0,
+        }
+    }
+
+    /// Appends a sample, overwriting the oldest sample when full.
+    pub fn push(&mut self, value: f32) {
+        if self.values.is_empty() {
+            return;
+        }
+        if self.len < self.values.len() {
+            let index = (self.start + self.len) % self.values.len();
+            self.values[index] = value;
+            self.len += 1;
+        } else {
+            self.values[self.start] = value;
+            self.start = (self.start + 1) % self.values.len();
+        }
+    }
+
+    /// Clears the logical series.
+    pub fn clear(&mut self) {
+        self.start = 0;
+        self.len = 0;
+    }
+
+    /// Returns the number of samples.
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Returns true when no samples are stored.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Returns the sample at chronological `index`.
+    #[must_use]
+    pub fn get(&self, index: usize) -> Option<f32> {
+        if index >= self.len || self.values.is_empty() {
+            return None;
+        }
+        Some(self.values[(self.start + index) % self.values.len()])
+    }
+
+    /// Iterates samples from oldest to newest.
+    pub fn iter(&self) -> GraphSeriesIter<'_> {
+        GraphSeriesIter {
+            values: self.values,
+            start: self.start,
+            len: self.len,
+            index: 0,
+        }
+    }
+}
+
+/// Iterator over a graph series buffer.
+pub struct GraphSeriesIter<'a> {
+    values: &'a [f32],
+    start: usize,
+    len: usize,
+    index: usize,
+}
+
+impl Iterator for GraphSeriesIter<'_> {
+    type Item = f32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= self.len || self.values.is_empty() {
+            return None;
+        }
+        let sample = self.values[(self.start + self.index) % self.values.len()];
+        self.index += 1;
+        Some(sample)
+    }
+}
+
+/// Mapping between graph data values and display pixels.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GraphViewport {
+    /// Pixel area used for the graph.
+    pub area: Rectangle,
+    /// Data value drawn at the bottom of `area`.
+    pub min: f32,
+    /// Data value drawn at the top of `area`.
+    pub max: f32,
+}
+
+impl GraphViewport {
+    /// Creates a viewport for values in `min..=max`.
+    #[must_use]
+    pub const fn new(area: Rectangle, min: f32, max: f32) -> Self {
+        Self { area, min, max }
+    }
+
+    /// Maps a sample index and count to an X coordinate.
+    #[must_use]
+    pub fn x_for_index(self, index: usize, count: usize) -> i32 {
+        if count <= 1 || self.area.size.width <= 1 {
+            return self.area.top_left.x;
+        }
+        self.area.top_left.x
+            + (index as i32 * (self.area.size.width as i32 - 1) / (count as i32 - 1))
+    }
+
+    /// Maps a data value to a clipped Y coordinate.
+    #[must_use]
+    pub fn y_for_value(self, value: f32) -> i32 {
+        let span = self.max - self.min;
+        if span <= f32::EPSILON || self.area.size.height <= 1 {
+            return self.area.top_left.y + self.area.size.height as i32 - 1;
+        }
+        let normalized = ((value - self.min) / span).clamp(0.0, 1.0);
+        self.area.top_left.y + ((1.0 - normalized) * (self.area.size.height as f32 - 1.0)) as i32
+    }
+
+    /// Maps a sample to a point inside the viewport.
+    #[must_use]
+    pub fn point_for(self, index: usize, count: usize, value: f32) -> Point {
+        Point::new(self.x_for_index(index, count), self.y_for_value(value))
+    }
+
+    /// Returns the graph x-axis Y coordinate.
+    #[must_use]
+    pub fn x_axis_y(self) -> i32 {
+        self.area.top_left.y + self.area.size.height as i32 - 1
+    }
 }
 
 impl TextBlockStyle {
@@ -236,6 +414,207 @@ where
     Rectangle::new(area.top_left, Size::new(filled_width, area.size.height))
         .into_styled(PrimitiveStyle::with_fill(foreground))
         .draw(target)
+}
+
+/// Draws a dithered rectangle fill.
+pub fn draw_dithered_rect<D>(
+    target: &mut D,
+    area: Rectangle,
+    color: Rgb565,
+    pattern: DitherPattern,
+) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    if area.is_zero_sized() {
+        return Ok(());
+    }
+    let x1 = area.top_left.x + area.size.width as i32;
+    let y1 = area.top_left.y + area.size.height as i32;
+    for y in area.top_left.y..y1 {
+        for x in area.top_left.x..x1 {
+            let point = Point::new(x, y);
+            if pattern.covers(point) {
+                Pixel(point, color).draw(target)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Draws a black dither veil for dimming an underlying area.
+pub fn draw_black_dither_veil<D>(
+    target: &mut D,
+    area: Rectangle,
+    pattern: DitherPattern,
+) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    draw_dithered_rect(target, area, Rgb565::BLACK, pattern)
+}
+
+/// Draws a sparse vertical fill between two Y coordinates.
+pub fn draw_sparse_vertical_fill<D>(
+    target: &mut D,
+    x: i32,
+    top_y: i32,
+    bottom_y: i32,
+    color: Rgb565,
+    pattern: DitherPattern,
+) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    for y in top_y.min(bottom_y)..=top_y.max(bottom_y) {
+        let point = Point::new(x, y);
+        if pattern.covers(point) {
+            Pixel(point, color).draw(target)?;
+        }
+    }
+    Ok(())
+}
+
+/// Draws one graph series as connected line segments.
+pub fn draw_graph_series<D>(
+    target: &mut D,
+    viewport: GraphViewport,
+    values: &[f32],
+    color: Rgb565,
+) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    if values.len() < 2 {
+        return Ok(());
+    }
+    let mut previous = viewport.point_for(0, values.len(), values[0]);
+    for (index, value) in values.iter().copied().enumerate().skip(1) {
+        let current = viewport.point_for(index, values.len(), value);
+        draw_line(target, previous, current, color, 1)?;
+        previous = current;
+    }
+    Ok(())
+}
+
+/// Draws dithered fill from one series down to the x-axis.
+pub fn draw_graph_fill_to_axis<D>(
+    target: &mut D,
+    viewport: GraphViewport,
+    values: &[f32],
+    color: Rgb565,
+    pattern: DitherPattern,
+) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    for (index, value) in values.iter().copied().enumerate() {
+        let point = viewport.point_for(index, values.len(), value);
+        draw_sparse_vertical_fill(
+            target,
+            point.x,
+            point.y,
+            viewport.x_axis_y(),
+            color,
+            pattern,
+        )?;
+    }
+    Ok(())
+}
+
+/// Draws layered, non-overlapping dither fills for three graph series.
+///
+/// Each sample column is sorted by scaled Y coordinate so fill ownership
+/// changes correctly when lines cross.
+pub fn draw_three_series_layered_fills<D>(
+    target: &mut D,
+    viewport: GraphViewport,
+    series: [(&[f32], Rgb565, DitherPattern); 3],
+) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    let count = series
+        .iter()
+        .map(|(values, _, _)| values.len())
+        .min()
+        .unwrap_or(0);
+    for index in 0..count {
+        let x = viewport.x_for_index(index, count);
+        let mut bands = [
+            (
+                viewport.y_for_value(series[0].0[index]),
+                series[0].1,
+                series[0].2,
+            ),
+            (
+                viewport.y_for_value(series[1].0[index]),
+                series[1].1,
+                series[1].2,
+            ),
+            (
+                viewport.y_for_value(series[2].0[index]),
+                series[2].1,
+                series[2].2,
+            ),
+        ];
+        sort_graph_bands(&mut bands);
+        draw_sparse_vertical_fill(target, x, bands[0].0, bands[1].0, bands[0].1, bands[0].2)?;
+        draw_sparse_vertical_fill(target, x, bands[1].0, bands[2].0, bands[1].1, bands[1].2)?;
+        draw_sparse_vertical_fill(
+            target,
+            x,
+            bands[2].0,
+            viewport.x_axis_y(),
+            bands[2].1,
+            bands[2].2,
+        )?;
+    }
+    Ok(())
+}
+
+/// Draws y-axis labels at normalized positions from 0.0 bottom to 1.0 top.
+pub fn draw_graph_y_labels<D>(
+    target: &mut D,
+    viewport: GraphViewport,
+    labels: &[(&str, f32)],
+    color: Rgb565,
+) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    let text_style = MonoTextStyleBuilder::new()
+        .font(&FONT_6X10)
+        .text_color(color)
+        .build();
+    for (text, normalized) in labels.iter().copied() {
+        let y = viewport.area.top_left.y
+            + ((1.0 - normalized.clamp(0.0, 1.0)) * viewport.area.size.height as f32) as i32;
+        Text::new(text, Point::new(viewport.area.top_left.x, y), text_style).draw(target)?;
+    }
+    Ok(())
+}
+
+/// Draws x-axis labels at normalized positions from 0.0 left to 1.0 right.
+pub fn draw_graph_x_labels<D>(
+    target: &mut D,
+    viewport: GraphViewport,
+    labels: &[(&str, f32)],
+    color: Rgb565,
+) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    let text_style = MonoTextStyleBuilder::new()
+        .font(&FONT_6X10)
+        .text_color(color)
+        .build();
+    for (text, normalized) in labels.iter().copied() {
+        let x = viewport.area.top_left.x
+            + (normalized.clamp(0.0, 1.0) * viewport.area.size.width as f32) as i32;
+        Text::new(text, Point::new(x, viewport.x_axis_y() + 10), text_style).draw(target)?;
+    }
+    Ok(())
 }
 
 /// Draws a filled pill shape inside `area`.
@@ -468,6 +847,18 @@ fn split_line(text: &str, max_chars: usize) -> (&str, &str) {
         _ => split_byte,
     };
     (&text[..split_at], &text[split_at..])
+}
+
+fn sort_graph_bands(bands: &mut [(i32, Rgb565, DitherPattern); 3]) {
+    if bands[0].0 > bands[1].0 {
+        bands.swap(0, 1);
+    }
+    if bands[1].0 > bands[2].0 {
+        bands.swap(1, 2);
+    }
+    if bands[0].0 > bands[1].0 {
+        bands.swap(0, 1);
+    }
 }
 
 fn normalize_degrees(degrees: i32) -> i32 {

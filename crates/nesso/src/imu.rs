@@ -1,3 +1,14 @@
+//! BMI270 IMU support.
+//!
+//! Through the high-level facade, initialize once and then poll acceleration or
+//! gyroscope samples through short shared-I2C calls.
+//!
+//! ```rust,ignore
+//! nesso.init_imu()?;
+//! let acceleration = nesso.acceleration()?;
+//! let gyroscope = nesso.gyroscope()?;
+//! ```
+
 use bmi2::{
     Bmi2, I2cAddr, config,
     interface::I2cInterface,

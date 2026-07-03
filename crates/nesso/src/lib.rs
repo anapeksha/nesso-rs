@@ -5,6 +5,10 @@
 //! Nesso N1 board bring-up path and exposes lower-level hardware modules for
 //! advanced use.
 //!
+//! Short facade calls borrow the shared I2C bus only for the duration of one
+//! operation, which keeps async applications cooperative without making the
+//! base crate depend on Embassy.
+//!
 //! # Example
 //!
 //! ```rust,ignore
@@ -89,9 +93,10 @@ use crate::bsp::{
     BoardInitError, ButtonLevels, NessoBuzzer, NessoDisplay, NessoI2c, NessoN1, NessoN1Board,
 };
 use crate::imu::{Acceleration, Bmi270, Gyroscope};
+use crate::input::{BoardButtons, ButtonTiming};
 #[cfg(feature = "lora")]
 use crate::lora::NessoLora;
-use crate::power::{BatteryStatus, ChargingConfig, Power};
+use crate::power::{BatteryStatus, ChargeStatus, ChargingConfig, Power};
 use crate::storage::{EspFlashSettingsStore, SettingsPartition};
 use crate::touch::{Touch, TouchEvent, TouchState};
 #[cfg(feature = "wifi")]
@@ -225,9 +230,40 @@ impl Nesso {
         NessoN1::init_button_inputs(&mut self.i2c).map_err(|_| NessoError::Input)
     }
 
+    /// Configures KEY1/KEY2 and returns a board-button event helper.
+    pub fn init_button_events(&mut self) -> Result<BoardButtons, NessoError> {
+        self.init_button_events_with_timing(ButtonTiming::default())
+    }
+
+    /// Configures KEY1/KEY2 and returns a board-button event helper with
+    /// custom timing thresholds.
+    pub fn init_button_events_with_timing(
+        &mut self,
+        timing: ButtonTiming,
+    ) -> Result<BoardButtons, NessoError> {
+        self.init_buttons()?;
+        Ok(BoardButtons::new(timing))
+    }
+
     /// Returns the current KEY1/KEY2 pressed state.
     pub fn button_levels(&mut self) -> Result<ButtonLevels, NessoError> {
         NessoN1::read_button_levels(&mut self.i2c).map_err(|_| NessoError::Input)
+    }
+
+    /// Borrows a short-lived facade over shared I2C services.
+    ///
+    /// The helper avoids long-lived mutable aliasing while keeping repeated
+    /// touch, IMU, and power polling code compact.
+    pub fn with_sensors<R>(
+        &mut self,
+        f: impl FnOnce(&mut NessoSensors<'_>) -> Result<R, NessoError>,
+    ) -> Result<R, NessoError> {
+        let mut sensors = NessoSensors {
+            i2c: &mut self.i2c,
+            imu_initialized: self.imu_initialized,
+            previous_touch: &mut self.previous_touch,
+        };
+        f(&mut sensors)
     }
 
     /// Returns raw BMI270 accelerometer data.
@@ -359,5 +395,68 @@ impl Nesso {
     ) -> Result<EspFlashSettingsStore<'static>, NessoError> {
         let flash = self.flash.take().ok_or(NessoError::FlashUnavailable)?;
         Ok(EspFlashSettingsStore::from_flash(flash, offset))
+    }
+}
+
+/// Borrow-scoped shared I2C sensor facade.
+pub struct NessoSensors<'a> {
+    i2c: &'a mut NessoI2c,
+    imu_initialized: bool,
+    previous_touch: &'a mut TouchState,
+}
+
+impl NessoSensors<'_> {
+    /// Returns the current touch state.
+    pub fn touch_state(&mut self) -> Result<TouchState, NessoError> {
+        Touch::new(&mut *self.i2c)
+            .read_state()
+            .map_err(|_| NessoError::Touch)
+    }
+
+    /// Polls a touch event while preserving previous touch state.
+    pub fn touch_event(&mut self) -> Result<TouchEvent, NessoError> {
+        let current = self.touch_state()?;
+        let event = match (self.previous_touch.primary(), current.primary()) {
+            (None, Some(point)) => TouchEvent::Pressed(point),
+            (Some(_), None) => TouchEvent::Released,
+            (Some(previous), Some(point)) if previous != point => TouchEvent::Moved(point),
+            _ => TouchEvent::Idle,
+        };
+        *self.previous_touch = current;
+        Ok(event)
+    }
+
+    /// Returns raw BMI270 accelerometer data.
+    pub fn acceleration(&mut self) -> Result<Acceleration, NessoError> {
+        if !self.imu_initialized {
+            return Err(NessoError::ImuNotInitialized);
+        }
+        Bmi270::new(&mut *self.i2c, Delay::new())
+            .acceleration()
+            .map_err(|_| NessoError::Imu)
+    }
+
+    /// Returns raw BMI270 gyroscope data.
+    pub fn gyroscope(&mut self) -> Result<Gyroscope, NessoError> {
+        if !self.imu_initialized {
+            return Err(NessoError::ImuNotInitialized);
+        }
+        Bmi270::new(&mut *self.i2c, Delay::new())
+            .gyroscope()
+            .map_err(|_| NessoError::Imu)
+    }
+
+    /// Returns battery and charger status.
+    pub fn battery_status(&mut self) -> Result<BatteryStatus, NessoError> {
+        Power::new(&mut *self.i2c)
+            .battery_status()
+            .map_err(|_| NessoError::Power)
+    }
+
+    /// Returns charger status only.
+    pub fn charge_status(&mut self) -> Result<ChargeStatus, NessoError> {
+        Power::new(&mut *self.i2c)
+            .charge_status()
+            .map_err(|_| NessoError::Power)
     }
 }
