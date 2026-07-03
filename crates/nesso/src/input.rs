@@ -1,3 +1,20 @@
+//! Button and touch input state machines.
+//!
+//! These helpers are pure `no_std` logic. Feed them sampled board state and
+//! they return semantic events.
+//!
+//! ```rust,ignore
+//! let mut buttons = nesso.init_button_events()?;
+//! let levels = nesso.button_levels()?;
+//! if let Some(event) = buttons.update(levels.key1_pressed, levels.key2_pressed, now_ms) {
+//!     match event {
+//!         nesso::input::BoardButtonEvent::Key1(nesso::input::ButtonEvent::ShortPressed) => {}
+//!         nesso::input::BoardButtonEvent::Key2(nesso::input::ButtonEvent::Held) => {}
+//!         _ => {}
+//!     }
+//! }
+//! ```
+
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ButtonEvent {
@@ -40,6 +57,127 @@ pub struct Button {
     last_repeat_ms: u32,
     held_reported: bool,
     timing: ButtonTiming,
+}
+
+/// Board-level button event for the Arduino Nesso N1 physical keys.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BoardButtonEvent {
+    /// Event from physical KEY1.
+    Key1(ButtonEvent),
+    /// Event from physical KEY2.
+    Key2(ButtonEvent),
+}
+
+/// Events produced by one board-button sampling tick.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct BoardButtonEvents {
+    /// Event from KEY1, if any.
+    pub key1: Option<ButtonEvent>,
+    /// Event from KEY2, if any.
+    pub key2: Option<ButtonEvent>,
+}
+
+impl BoardButtonEvents {
+    /// Returns true when neither key produced an event.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.key1.is_none() && self.key2.is_none()
+    }
+
+    /// Returns an iterator over events in KEY1 then KEY2 order.
+    pub const fn iter(self) -> BoardButtonEventsIter {
+        BoardButtonEventsIter {
+            events: self,
+            index: 0,
+        }
+    }
+}
+
+impl IntoIterator for BoardButtonEvents {
+    type IntoIter = BoardButtonEventsIter;
+    type Item = BoardButtonEvent;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+/// Iterator over board button events from one sampling tick.
+#[derive(Clone, Copy, Debug)]
+pub struct BoardButtonEventsIter {
+    events: BoardButtonEvents,
+    index: u8,
+}
+
+impl Iterator for BoardButtonEventsIter {
+    type Item = BoardButtonEvent;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.index < 2 {
+            let event = match self.index {
+                0 => self.events.key1.map(BoardButtonEvent::Key1),
+                _ => self.events.key2.map(BoardButtonEvent::Key2),
+            };
+            self.index += 1;
+            if event.is_some() {
+                return event;
+            }
+        }
+        None
+    }
+}
+
+/// Two-button state machine for Nesso N1 KEY1/KEY2.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BoardButtons {
+    key1: Button,
+    key2: Button,
+}
+
+impl BoardButtons {
+    /// Creates a board-button helper with shared timing thresholds.
+    #[must_use]
+    pub const fn new(timing: ButtonTiming) -> Self {
+        Self {
+            key1: Button::new(timing),
+            key2: Button::new(timing),
+        }
+    }
+
+    /// Updates both keys and returns the first event observed.
+    pub fn update(
+        &mut self,
+        key1_pressed: bool,
+        key2_pressed: bool,
+        now_ms: u32,
+    ) -> Option<BoardButtonEvent> {
+        self.update_all(key1_pressed, key2_pressed, now_ms)
+            .into_iter()
+            .next()
+    }
+
+    /// Updates both keys and returns up to one event per key.
+    #[must_use]
+    pub fn update_all(
+        &mut self,
+        key1_pressed: bool,
+        key2_pressed: bool,
+        now_ms: u32,
+    ) -> BoardButtonEvents {
+        BoardButtonEvents {
+            key1: self.key1.update(key1_pressed, now_ms),
+            key2: self.key2.update(key2_pressed, now_ms),
+        }
+    }
+}
+
+impl Default for BoardButtons {
+    fn default() -> Self {
+        Self::new(ButtonTiming::default())
+    }
 }
 
 impl Button {

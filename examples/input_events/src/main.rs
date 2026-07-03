@@ -12,7 +12,7 @@ use esp_hal::{clock::CpuClock, delay::Delay, main};
 use heapless::String;
 use nesso::{
     Nesso,
-    input::{Button, ButtonEvent, TouchGesture},
+    input::{BoardButtonEvent, TouchGesture},
 };
 
 esp_bootloader_esp_idf::esp_app_desc!();
@@ -26,9 +26,6 @@ fn main() -> ! {
         Ok(nesso) => nesso,
         Err(_) => abort(),
     };
-    if nesso.init_buttons().is_err() {
-        abort()
-    }
     if nesso.display.clear(Rgb565::BLACK).is_err()
         || nesso
             .display
@@ -37,7 +34,10 @@ fn main() -> ! {
     {
         abort()
     }
-    let mut key1 = Button::default();
+    let mut buttons = match nesso.init_button_events() {
+        Ok(buttons) => buttons,
+        Err(_) => abort(),
+    };
     let mut touch = TouchGesture::default();
     let mut now_ms = 0u32;
     let mut previous_line = String::<64>::new();
@@ -47,20 +47,24 @@ fn main() -> ! {
             Ok(levels) => levels,
             Err(_) => abort(),
         };
-        let button_event = key1.update(levels.key1_pressed, now_ms);
+        let button_event = buttons.update(levels.key1_pressed, levels.key2_pressed, now_ms);
         let touch_state = match nesso.touch_state() {
             Ok(state) => state,
             Err(_) => abort(),
         };
         let touch_event = touch.update(touch_state.primary().map(|point| (point.x, point.y)));
         let rendered_button_event = match button_event {
-            Some(event) => event,
-            None => ButtonEvent::Released,
+            Some(BoardButtonEvent::Key1(event)) => ("KEY1", event),
+            Some(BoardButtonEvent::Key2(event)) => ("KEY2", event),
+            None => ("KEY-", nesso::input::ButtonEvent::Released),
         };
         let mut line = String::<64>::new();
         let _ = core::fmt::write(
             &mut line,
-            format_args!("{rendered_button_event:?} {touch_event:?}"),
+            format_args!(
+                "{} {:?} {touch_event:?}",
+                rendered_button_event.0, rendered_button_event.1
+            ),
         );
         if !render_changed_line(&mut nesso.display, &mut previous_line, &line) {
             abort()

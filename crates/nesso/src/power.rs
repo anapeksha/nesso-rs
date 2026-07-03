@@ -1,3 +1,13 @@
+//! Battery gauge and charger helpers.
+//!
+//! The module covers the BQ27220 fuel gauge and AW32001 charger. Facade users
+//! can poll battery state or enable the default charging profile directly.
+//!
+//! ```rust,ignore
+//! let status = nesso.battery_status()?;
+//! nesso.enable_battery_charging()?;
+//! ```
+
 use embedded_hal::i2c::I2c;
 
 pub const BQ27220_ADDRESS: u8 = 0x55;

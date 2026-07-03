@@ -32,7 +32,10 @@ Validated examples currently cover:
   gated transmit example
 - Motion/context helpers derived from BMI270 acceleration samples
 - Lightweight layout, text, progress, transition, shape, and sprite helpers
-- M5Stack Unit ENV Pro BME688 environmental reads over I2C/Qwiic
+- M5Stack Unit ENV Pro BME688 async-first state-machine reads over I2C/Qwiic
+- Board KEY1/KEY2 button event helpers for edge, click, hold, and repeat events
+- Dithered overlays, dirty-region sprite flushing, and small multi-series graph
+  helpers for no-alloc display UIs
 - Board information display
 
 ## Installation
@@ -41,14 +44,14 @@ Add the public facade crate:
 
 ```toml
 [dependencies]
-nesso = "0.2.2"
+nesso = "0.2.3"
 ```
 
 Enable Wi-Fi only for applications that use the ESP32-C6 radio:
 
 ```toml
 [dependencies]
-nesso = { version = "0.2.2", features = ["wifi"] }
+nesso = { version = "0.2.3", features = ["wifi"] }
 esp-alloc = "0.10"
 ```
 
@@ -56,14 +59,14 @@ Enable ENV Pro support only for applications that use the external unit:
 
 ```toml
 [dependencies]
-nesso = { version = "0.2.2", features = ["env"] }
+nesso = { version = "0.2.3", features = ["env"] }
 ```
 
 Enable BLE only for applications that use the ESP32-C6 Bluetooth controller:
 
 ```toml
 [dependencies]
-nesso = { version = "0.2.2", features = ["ble"] }
+nesso = { version = "0.2.3", features = ["ble"] }
 esp-alloc = "0.10"
 ```
 
@@ -72,14 +75,14 @@ transceiver:
 
 ```toml
 [dependencies]
-nesso = { version = "0.2.2", features = ["lora"] }
+nesso = { version = "0.2.3", features = ["lora"] }
 ```
 
 Enable `defmt` formatting only for applications that use `defmt` logging:
 
 ```toml
 [dependencies]
-nesso = { version = "0.2.2", features = ["defmt"] }
+nesso = { version = "0.2.3", features = ["defmt"] }
 ```
 
 ## Public Modules
@@ -98,7 +101,8 @@ nesso = { version = "0.2.2", features = ["defmt"] }
 - `nesso::runtime`: explicit ESP radio runtime startup helpers for Wi-Fi/BLE
   async applications.
 - `nesso::touch`: FT6336U touch controller support.
-- `nesso::input`: button event and touch gesture state machine helpers.
+- `nesso::input`: generic button, board KEY1/KEY2 event, and touch gesture
+  state machine helpers.
 - `nesso::imu`: BMI270 initialization, config upload, and sensor reads.
 - `nesso::motion`: coarse motion and pose helpers built from accelerometer
   samples.
@@ -111,9 +115,9 @@ nesso = { version = "0.2.2", features = ["defmt"] }
 - `nesso::storage`: heapless settings storage primitives and
   `esp-storage` flash-backed persistence.
 - `nesso::sprite`: caller-owned RGB565 sprite/framebuffer support, sprite
-  region iterators, and dirty-region flushing.
-- `nesso::ui`: small `embedded-graphics` layout, label, progress, and
-  transition helpers plus generic shape primitives.
+  region iterators, origin-aware dirty-region flushing, and overlay clears.
+- `nesso::ui`: small `embedded-graphics` layout, label, progress, dither fill,
+  graph, transition, and shape helpers.
 
 ## Examples
 
@@ -219,6 +223,19 @@ available alongside `nesso.display`; the BSP shares the documented SPI bus using
 transmission or place the SX1262 in TX mode. Attach the external LoRa antenna
 before using `Sx1262::transmit`. The `lora_send` example is compile-time gated
 and will not transmit unless built with `NESSO_LORA_ALLOW_TX=1`.
+
+ENV Pro is behind the optional `env` feature. For UI or async Embassy apps,
+prefer the state-machine flow so the BME688 heater/conversion window does not
+block display rendering:
+
+```rust,ignore
+let ready_after_us = env.start_measurement()?;
+Timer::after_micros(ready_after_us.into()).await;
+let sample = env.read_measurement()?;
+```
+
+`EnvPro::measure()` remains available for existing blocking users. Treat
+`EnvError::NoNewData` from `read_measurement()` as retryable.
 
 ## Build
 

@@ -1,3 +1,13 @@
+//! Passive buzzer helpers for the Nesso N1.
+//!
+//! Use blocking playback for simple firmware, or enqueue tones and call
+//! `Buzzer::poll` from a UI loop for nonblocking playback.
+//!
+//! ```rust,ignore
+//! let tone = nesso::audio::Tone::new(880, 120);
+//! nesso.audio.play_blocking(tone, &mut delay)?;
+//! ```
+
 use embedded_hal::{delay::DelayNs, digital::OutputPin};
 use heapless::Deque;
 

@@ -1,3 +1,13 @@
+//! ST7789P3 display support for the Arduino Nesso N1.
+//!
+//! The display implements `embedded-graphics` drawing and exposes convenience
+//! helpers for text, orientation, backlight, and partial-region updates.
+//!
+//! ```rust,ignore
+//! nesso.display.clear(Rgb565::BLACK)?;
+//! nesso.display.print_centered("Nesso N1", 120, Rgb565::WHITE)?;
+//! ```
+
 use core::convert::Infallible;
 
 use embedded_graphics::{

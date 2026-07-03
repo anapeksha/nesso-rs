@@ -6,9 +6,13 @@ use embedded_graphics::{
 };
 use nesso_host_tests::{
     display::{DisplayGeometry, DisplayOrientation},
-    sprite::{DirtyRegions, Sprite, SpriteError},
+    sprite::{DirtyRegions, Sprite, SpriteError, clipped_region, union_region},
     touch::{TouchPoint, TouchState},
-    ui::{Insets, ScreenLayout, draw_arc, draw_filled_sector, draw_line, draw_outlined_circle},
+    ui::{
+        DitherPattern, GraphSeriesBuffer, GraphViewport, Insets, ScreenLayout,
+        draw_black_dither_veil, draw_arc, draw_filled_sector, draw_graph_series,
+        draw_line, draw_outlined_circle, draw_three_series_layered_fills,
+    },
 };
 
 #[test]
@@ -139,6 +143,96 @@ fn sprite_region_iterator_is_row_major_and_clipped() -> Result<(), String> {
         [Rgb565::GREEN, Rgb565::BLUE, Rgb565::BLACK, Rgb565::YELLOW]
     );
     Ok(())
+}
+
+#[test]
+fn dirty_regions_flush_sprite_at_origin() -> Result<(), String> {
+    let mut display = MockDisplay::<Rgb565>::new();
+    let mut pixels = [Rgb565::BLACK; 4];
+    let mut sprite = Sprite::new(2, 2, &mut pixels).map_err(|error| format!("{error:?}"))?;
+    sprite
+        .fill_solid(
+            &Rectangle::new(Point::zero(), Size::new(2, 2)),
+            Rgb565::GREEN,
+        )
+        .map_err(|error| format!("{error:?}"))?;
+    let mut dirty = DirtyRegions::<2>::new();
+    dirty
+        .mark_clipped(
+            Rectangle::new(Point::zero(), Size::new(2, 2)),
+            sprite.bounds(),
+        )
+        .map_err(|error| format!("{error:?}"))?;
+    dirty
+        .flush_sprite_at(&sprite, &mut display, Point::new(3, 4))
+        .map_err(|error| format!("{error:?}"))?;
+
+    assert_eq!(
+        clipped_region(
+            Rectangle::new(Point::new(-1, -1), Size::new(4, 4)),
+            sprite.bounds()
+        ),
+        sprite.bounds()
+    );
+    assert_eq!(
+        union_region(
+            Rectangle::new(Point::new(0, 0), Size::new(2, 2)),
+            Rectangle::new(Point::new(2, 1), Size::new(2, 2))
+        ),
+        Rectangle::new(Point::new(0, 0), Size::new(4, 3))
+    );
+    Ok(())
+}
+
+#[test]
+fn dither_patterns_cover_expected_points() {
+    assert!(DitherPattern::Checker50.covers(Point::new(0, 0)));
+    assert!(!DitherPattern::Checker50.covers(Point::new(1, 0)));
+    assert!(DitherPattern::Vertical50.covers(Point::new(2, 3)));
+    assert!(!DitherPattern::Vertical50.covers(Point::new(3, 3)));
+}
+
+#[test]
+fn dither_and_graph_helpers_draw_into_mock_target() -> Result<(), String> {
+    let mut display = MockDisplay::<Rgb565>::new();
+    display.set_allow_overdraw(true);
+    draw_black_dither_veil(
+        &mut display,
+        Rectangle::new(Point::zero(), Size::new(8, 8)),
+        DitherPattern::Checker50,
+    )
+    .map_err(|error| format!("{error:?}"))?;
+
+    let viewport = GraphViewport::new(Rectangle::new(Point::new(0, 0), Size::new(8, 8)), 0.0, 1.0);
+    assert_eq!(viewport.x_for_index(1, 3), 3);
+    assert_eq!(viewport.y_for_value(0.0), 7);
+    assert_eq!(viewport.y_for_value(1.0), 0);
+    draw_graph_series(&mut display, viewport, &[0.0, 0.5, 1.0], Rgb565::GREEN)
+        .map_err(|error| format!("{error:?}"))?;
+    draw_three_series_layered_fills(
+        &mut display,
+        viewport,
+        [
+            (&[0.8, 0.2], Rgb565::RED, DitherPattern::Vertical50),
+            (&[0.5, 0.5], Rgb565::GREEN, DitherPattern::Checker50),
+            (&[0.2, 0.8], Rgb565::BLUE, DitherPattern::Sparse25),
+        ],
+    )
+    .map_err(|error| format!("{error:?}"))?;
+    Ok(())
+}
+
+#[test]
+fn graph_series_buffer_wraps_without_allocating() {
+    let mut storage = [0.0; 3];
+    let mut series = GraphSeriesBuffer::new(&mut storage);
+    series.push(1.0);
+    series.push(2.0);
+    series.push(3.0);
+    series.push(4.0);
+
+    let values: heapless::Vec<f32, 3> = series.iter().collect();
+    assert_eq!(values.as_slice(), [2.0, 3.0, 4.0]);
 }
 
 #[test]

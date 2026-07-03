@@ -1,4 +1,14 @@
-use embedded_graphics::{pixelcolor::Rgb565, prelude::*, primitives::Rectangle};
+//! Caller-owned RGB565 sprites and dirty-region helpers.
+//!
+//! ```rust,ignore
+//! let mut pixels = [Rgb565::BLACK; 64 * 64];
+//! let sprite = nesso::sprite::Sprite::new(64, 64, &mut pixels)?;
+//! let mut dirty = nesso::sprite::DirtyRegions::<8>::new();
+//! dirty.mark_clipped(area, sprite.bounds())?;
+//! dirty.flush_sprite_at(&sprite, &mut display, Point::zero())?;
+//! ```
+
+use embedded_graphics::{Drawable, pixelcolor::Rgb565, prelude::*, primitives::Rectangle};
 use heapless::Vec;
 
 /// Caller-owned RGB565 sprite buffer.
@@ -113,6 +123,11 @@ impl<'a> Sprite<'a> {
         target.fill_contiguous(&target_area, self.region_pixels(&clipped))
     }
 
+    /// Clears a sprite-local overlay rectangle.
+    pub fn clear_overlay(&mut self, area: Rectangle, color: Rgb565) -> Result<(), SpriteError> {
+        self.fill_solid(&area, color)
+    }
+
     /// Returns an iterator over a clipped region in row-major order.
     pub fn region_pixels(&self, area: &Rectangle) -> SpriteRegionPixels<'_> {
         let clipped = area.intersection(&self.bounds());
@@ -207,6 +222,15 @@ impl<const N: usize> DirtyRegions<N> {
         self.mark(region, bounds)
     }
 
+    /// Marks a dirty region after clipping it to `bounds`.
+    pub fn mark_clipped(
+        &mut self,
+        region: Rectangle,
+        bounds: Rectangle,
+    ) -> Result<(), SpriteError> {
+        self.mark(region, bounds)
+    }
+
     /// Marks a dirty region after clipping and coalescing it with overlaps.
     pub fn mark(&mut self, region: Rectangle, bounds: Rectangle) -> Result<(), SpriteError> {
         let clipped = region.intersection(&bounds);
@@ -262,6 +286,37 @@ impl<const N: usize> DirtyRegions<N> {
         }
         Ok(())
     }
+
+    /// Copies all dirty regions from a sprite to a draw target at `origin`.
+    pub fn flush_sprite_at<D>(
+        &self,
+        sprite: &Sprite<'_>,
+        target: &mut D,
+        origin: Point,
+    ) -> Result<(), D::Error>
+    where
+        D: DrawTarget<Color = Rgb565>,
+    {
+        for region in self.iter() {
+            sprite.draw_region_at(target, region, origin + region.top_left)?;
+        }
+        Ok(())
+    }
+
+    /// Flushes dirty sprite regions at `origin` and clears this dirty list.
+    pub fn flush_and_clear_sprite_at<D>(
+        &mut self,
+        sprite: &Sprite<'_>,
+        target: &mut D,
+        origin: Point,
+    ) -> Result<(), D::Error>
+    where
+        D: DrawTarget<Color = Rgb565>,
+    {
+        self.flush_sprite_at(sprite, target, origin)?;
+        self.clear();
+        Ok(())
+    }
 }
 
 impl<const N: usize> Default for DirtyRegions<N> {
@@ -292,6 +347,29 @@ fn bounding_union(a: Rectangle, b: Rectangle) -> Rectangle {
         Point::new(x0, y0),
         Size::new((x1 - x0) as u32, (y1 - y0) as u32),
     )
+}
+
+/// Returns the intersection of `region` and `bounds`.
+#[must_use]
+pub fn clipped_region(region: Rectangle, bounds: Rectangle) -> Rectangle {
+    region.intersection(&bounds)
+}
+
+/// Returns the smallest rectangle containing both input rectangles.
+#[must_use]
+pub fn union_region(a: Rectangle, b: Rectangle) -> Rectangle {
+    bounding_union(a, b)
+}
+
+/// Clears an overlay rectangle on any RGB565 draw target.
+pub fn clear_overlay<D>(target: &mut D, area: Rectangle, color: Rgb565) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = Rgb565>,
+{
+    area.into_styled(embedded_graphics::primitives::PrimitiveStyle::with_fill(
+        color,
+    ))
+    .draw(target)
 }
 
 impl DrawTarget for Sprite<'_> {

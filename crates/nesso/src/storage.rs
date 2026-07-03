@@ -1,3 +1,15 @@
+//! Heapless settings storage and flash-backed persistence.
+//!
+//! Use `SettingsStore` for in-memory key/value settings and the facade flash
+//! helpers when the application wants persistence in the documented Nesso
+//! settings region.
+//!
+//! ```rust,ignore
+//! let mut settings = nesso::storage::SettingsStore::new();
+//! settings.set("theme", "dark")?;
+//! assert_eq!(settings.get("theme"), Some("dark"));
+//! ```
+
 use heapless::{String, Vec};
 
 /// Recommended partition label for applications that provide a partition table.

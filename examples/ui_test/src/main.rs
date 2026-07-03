@@ -3,7 +3,8 @@
 
 use embedded_graphics::{
     pixelcolor::Rgb565,
-    prelude::{RgbColor, Size},
+    prelude::{Point, RgbColor, Size},
+    primitives::Rectangle,
 };
 use embedded_hal::delay::DelayNs;
 use esp_backtrace as _;
@@ -11,8 +12,9 @@ use esp_hal::{clock::CpuClock, delay::Delay, main};
 use nesso::{
     Nesso,
     ui::{
-        Insets, LabelStyle, ScreenLayout, TextBlockStyle, draw_label, draw_progress_bar,
-        draw_wrapped_text,
+        DitherPattern, GraphViewport, Insets, LabelStyle, ScreenLayout, TextBlockStyle,
+        draw_black_dither_veil, draw_graph_fill_to_axis, draw_graph_series, draw_label,
+        draw_progress_bar, draw_wrapped_text,
     },
 };
 
@@ -52,9 +54,38 @@ fn main() -> ! {
             Rgb565::new(2, 2, 2),
         )
         .is_err()
+        || draw_black_dither_veil(
+            &mut nesso.display,
+            Rectangle::new(Point::new(18, 116), Size::new(99, 34)),
+            DitherPattern::Checker50,
+        )
+        .is_err()
+        || draw_graph_fill_to_axis(
+            &mut nesso.display,
+            GraphViewport::new(
+                Rectangle::new(Point::new(18, 152), Size::new(99, 40)),
+                0.0,
+                1.0,
+            ),
+            &[0.2, 0.5, 0.35, 0.8, 0.65],
+            Rgb565::new(0, 12, 6),
+            DitherPattern::Vertical50,
+        )
+        .is_err()
+        || draw_graph_series(
+            &mut nesso.display,
+            GraphViewport::new(
+                Rectangle::new(Point::new(18, 152), Size::new(99, 40)),
+                0.0,
+                1.0,
+            ),
+            &[0.2, 0.5, 0.35, 0.8, 0.65],
+            Rgb565::GREEN,
+        )
+        .is_err()
         || draw_wrapped_text(
             &mut nesso.display,
-            layout.row(154, 48, Insets::symmetric(12, 0)),
+            layout.row(204, 28, Insets::symmetric(12, 0)),
             "Wrapped text stays inside its view.",
             TextBlockStyle::new(Rgb565::YELLOW),
         )

@@ -46,16 +46,18 @@ fn main() -> ! {
             )
             .is_err()
         || dirty
-            .mark(Rectangle::new(Point::new(8, 8), Size::new(36, 18)), bounds)
+            .mark_clipped(Rectangle::new(Point::new(8, 8), Size::new(36, 18)), bounds)
             .is_err()
         || dirty
-            .mark(
+            .mark_clipped(
                 Rectangle::new(Point::new(28, 14), Size::new(44, 22)),
                 bounds,
             )
             .is_err()
         || nesso.display.clear(Rgb565::BLACK).is_err()
-        || dirty.flush_sprite(&sprite, &mut nesso.display).is_err()
+        || dirty
+            .flush_sprite_at(&sprite, &mut nesso.display, Point::new(18, 36))
+            .is_err()
         || nesso
             .display
             .print_centered("Coalesced dirty regions", 120, Rgb565::WHITE)

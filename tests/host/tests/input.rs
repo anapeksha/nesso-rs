@@ -1,5 +1,6 @@
 use nesso_host_tests::input::{
-    Button, ButtonEvent, ButtonTiming, Gesture, TouchGesture, TouchTiming,
+    BoardButtonEvent, BoardButtons, Button, ButtonEvent, ButtonTiming, Gesture, TouchGesture,
+    TouchTiming,
 };
 
 #[test]
@@ -34,6 +35,40 @@ fn button_reports_hold_long_press_and_repeat() {
     assert_eq!(button.update(true, 100), Some(ButtonEvent::Held));
     assert_eq!(button.update(true, 149), Some(ButtonEvent::Repeat));
     assert_eq!(button.update(false, 180), Some(ButtonEvent::LongPressed));
+}
+
+#[test]
+fn board_buttons_report_key_events() {
+    let mut buttons = BoardButtons::default();
+
+    assert_eq!(
+        buttons.update(true, false, 10),
+        Some(BoardButtonEvent::Key1(ButtonEvent::Pressed))
+    );
+    assert_eq!(
+        buttons.update(false, false, 80),
+        Some(BoardButtonEvent::Key1(ButtonEvent::ShortPressed))
+    );
+    assert_eq!(
+        buttons.update(false, true, 100),
+        Some(BoardButtonEvent::Key2(ButtonEvent::Pressed))
+    );
+}
+
+#[test]
+fn board_buttons_collect_simultaneous_events() {
+    let mut buttons = BoardButtons::default();
+
+    let events = buttons.update_all(true, true, 10);
+    assert_eq!(events.key1, Some(ButtonEvent::Pressed));
+    assert_eq!(events.key2, Some(ButtonEvent::Pressed));
+    assert_eq!(
+        events.into_iter().collect::<heapless::Vec<_, 2>>().as_slice(),
+        [
+            BoardButtonEvent::Key1(ButtonEvent::Pressed),
+            BoardButtonEvent::Key2(ButtonEvent::Pressed)
+        ]
+    );
 }
 
 #[test]

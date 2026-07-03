@@ -5,6 +5,46 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses semantic versioning.
 
+## [0.2.3] - 2026-07-04
+
+### Added
+
+- `Nesso::init_button_events()` and
+  `Nesso::init_button_events_with_timing(...)` for facade-friendly KEY1/KEY2
+  button events.
+- `input::BoardButtons`, `BoardButtonEvent`, and `BoardButtonEvents` built on
+  the existing `Button`/`ButtonEvent` state machine.
+- `Nesso::with_sensors(...)` for borrow-scoped repeated access to touch, IMU,
+  battery, and charger status without long-lived I2C aliasing.
+- Dirty-region sprite helpers:
+  `DirtyRegions::mark_clipped`, `DirtyRegions::flush_sprite_at`,
+  `DirtyRegions::flush_and_clear_sprite_at`, `Sprite::clear_overlay`,
+  `sprite::clipped_region`, `sprite::union_region`, and
+  `sprite::clear_overlay`.
+- Dithered UI helpers for faux translucency:
+  `DitherPattern`, `draw_dithered_rect`, `draw_black_dither_veil`, and
+  `draw_sparse_vertical_fill`.
+- Small no-alloc graph helpers:
+  `GraphSeriesBuffer`, `GraphViewport`, `draw_graph_series`,
+  `draw_graph_fill_to_axis`, `draw_three_series_layered_fills`,
+  `draw_graph_y_labels`, and `draw_graph_x_labels`.
+- `PR.md` with the v0.2.3 pull-request title, summary, and validation checklist.
+
+### Changed
+
+- `input_events` now demonstrates the board-level KEY1/KEY2 event helper.
+- `dirty_regions` now demonstrates origin-aware sprite dirty-region flushing.
+- `ui_test` now demonstrates dithered overlays and graph helpers.
+- README installation snippets now reference `nesso = "0.2.3"`.
+- README ENV guidance now documents the async-first start/wait/read flow and
+  retryable `EnvError::NoNewData` handling.
+
+### Fixed
+
+- App-side polling patterns from Project Nebula no longer need to duplicate BSP
+  glue for board buttons, dirty sprite flushing, dither overlays, or tiny graph
+  rendering.
+
 ## [0.2.2] - 2026-07-02
 
 ### Added
