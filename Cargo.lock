@@ -1728,7 +1728,7 @@ checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
 
 [[package]]
 name = "nesso"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "bmi2",
  "critical-section",
@@ -1736,6 +1736,7 @@ dependencies = [
  "embassy-futures",
  "embedded-graphics",
  "embedded-hal 1.0.0",
+ "embedded-hal-async",
  "embedded-hal-bus",
  "embedded-storage",
  "esp-hal",

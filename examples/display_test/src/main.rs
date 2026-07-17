@@ -12,7 +12,7 @@ use esp_hal::{clock::CpuClock, delay::Delay, main};
 use nesso::{
     Nesso,
     display::DisplayOrientation,
-    sprite::{DirtyRegions, Sprite},
+    sprite::{DirtyRectTracker, MaskedSprite},
     ui::{LabelStyle, draw_filled_pill, draw_label},
 };
 
@@ -35,43 +35,51 @@ fn main() -> ! {
         abort()
     }
 
-    let mut pixels = [Rgb565::BLACK; 96 * 32];
-    let mut sprite = match Sprite::new(96, 32, &mut pixels) {
-        Ok(sprite) => sprite,
-        Err(_) => abort(),
-    };
-    let mut dirty = DirtyRegions::<4>::new();
+    let mut sprite = MaskedSprite::<96, 32>::new(Rgb565::BLACK);
+    let mut dirty = DirtyRectTracker::<4>::new();
     let sprite_bounds = sprite.bounds();
 
-    sprite.clear(Rgb565::BLACK);
     if draw_filled_pill(&mut sprite, sprite_bounds, Rgb565::BLUE).is_err()
         || draw_label(
             &mut sprite,
             sprite_bounds,
-            "Landscape",
+            "MASKED",
             LabelStyle::centered(Rgb565::WHITE),
         )
         .is_err()
-        || dirty.push_clipped(sprite_bounds, sprite_bounds).is_err()
         || nesso.display.clear(Rgb565::BLACK).is_err()
-        || dirty.flush_sprite(&sprite, &mut nesso.display).is_err()
         || nesso
             .display
-            .fill_rect(
-                &Rectangle::new(Point::new(116, 48), Size::new(72, 18)),
-                Rgb565::GREEN,
-            )
-            .is_err()
-        || nesso
-            .display
-            .print_centered("Dirty update", 84, Rgb565::YELLOW)
+            .print_centered("v0.2.4 display paths", 18, Rgb565::YELLOW)
             .is_err()
     {
         abort()
     }
 
+    let left = Point::new(8, 52);
+    let right = Point::new(136, 52);
+    let mut current = right;
+    let mut next = left;
+
     loop {
-        delay.delay_ms(1000);
+        let old_rect = Rectangle::new(current, Size::new(96, 32));
+        let new_rect = Rectangle::new(next, Size::new(96, 32));
+        if dirty.register_movement(old_rect, new_rect).is_err()
+            || dirty
+                .update_screen(&mut nesso.display, Rgb565::BLACK, |display, dirty_area| {
+                    if !dirty_area.intersection(&new_rect).is_zero_sized() {
+                        display.draw_masked_sprite(next, &sprite)?;
+                    }
+                    Ok(())
+                })
+                .is_err()
+        {
+            abort()
+        }
+
+        current = next;
+        next = if next == left { right } else { left };
+        delay.delay_ms(750);
     }
 }
 

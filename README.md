@@ -44,14 +44,14 @@ Add the public facade crate:
 
 ```toml
 [dependencies]
-nesso = "0.2.3"
+nesso = "0.2.4"
 ```
 
 Enable Wi-Fi only for applications that use the ESP32-C6 radio:
 
 ```toml
 [dependencies]
-nesso = { version = "0.2.3", features = ["wifi"] }
+nesso = { version = "0.2.4", features = ["wifi"] }
 esp-alloc = "0.10"
 ```
 
@@ -59,14 +59,14 @@ Enable ENV Pro support only for applications that use the external unit:
 
 ```toml
 [dependencies]
-nesso = { version = "0.2.3", features = ["env"] }
+nesso = { version = "0.2.4", features = ["env"] }
 ```
 
 Enable BLE only for applications that use the ESP32-C6 Bluetooth controller:
 
 ```toml
 [dependencies]
-nesso = { version = "0.2.3", features = ["ble"] }
+nesso = { version = "0.2.4", features = ["ble"] }
 esp-alloc = "0.10"
 ```
 
@@ -75,15 +75,30 @@ transceiver:
 
 ```toml
 [dependencies]
-nesso = { version = "0.2.3", features = ["lora"] }
+nesso = { version = "0.2.4", features = ["lora"] }
 ```
 
 Enable `defmt` formatting only for applications that use `defmt` logging:
 
 ```toml
 [dependencies]
-nesso = { version = "0.2.3", features = ["defmt"] }
+nesso = { version = "0.2.4", features = ["defmt"] }
 ```
+
+Enable the generic asynchronous display transfer API only when the application
+owns an async SPI transport:
+
+```toml
+[dependencies]
+nesso = { version = "0.2.4", features = ["display-async"] }
+```
+
+On ESP32-C6, configure SPI2 with an ESP-HAL GDMA channel and static
+`DmaRxBuf`/`DmaTxBuf` descriptors, convert the resulting `SpiDmaBus` into async
+mode, and wrap it as the display's SPI device. ESP-HAL then owns descriptor
+lifetime and wakes `Display::draw_sprite_async(...)` when each transfer
+completes. The normal `Nesso::new()` facade keeps its synchronous shared SPI
+bus so display and LoRa remain source-compatible.
 
 ## Public Modules
 
@@ -114,8 +129,9 @@ nesso = { version = "0.2.3", features = ["defmt"] }
   feature.
 - `nesso::storage`: heapless settings storage primitives and
   `esp-storage` flash-backed persistence.
-- `nesso::sprite`: caller-owned RGB565 sprite/framebuffer support, sprite
-  region iterators, origin-aware dirty-region flushing, and overlay clears.
+- `nesso::sprite`: caller-owned and const-generic RGB565 sprite buffers,
+  bit-masked transparency, double buffering, movement tracking, origin-aware
+  dirty-region flushing, and overlay clears.
 - `nesso::ui`: small `embedded-graphics` layout, label, progress, dither fill,
   graph, transition, and shape helpers.
 
@@ -236,6 +252,13 @@ let sample = env.read_measurement()?;
 
 `EnvPro::measure()` remains available for existing blocking users. Treat
 `EnvError::NoNewData` from `read_measurement()` as retryable.
+
+For heapless display animation, use `SpriteBuffer<W, H>` or
+`MaskedSprite<W, H>`. A masked draw scans one-bit opacity data into horizontal
+runs, while `DoubleBufferedCanvas<W, H>` provides disjoint paint and transfer
+buffers. `DirtyRectTracker<N>` consolidates old and new sprite footprints that
+overlap or are within eight pixels. The const-generic buffers can be placed in
+static storage when their dimensions would be too large for a task stack.
 
 ## Build
 

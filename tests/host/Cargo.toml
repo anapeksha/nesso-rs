@@ -9,6 +9,7 @@ publish = false
 [features]
 default = []
 defmt = []
+display-async = []
 
 [lib]
 doctest = false
