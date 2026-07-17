@@ -5,6 +5,38 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses semantic versioning.
 
+## [0.2.4] - 2026-07-17
+
+### Added
+
+- `sprite::SpriteBuffer<W, H>` for owned, fixed-size RGB565 canvas storage.
+- `sprite::MaskedSprite<W, H>` with a one-bit opacity mask and horizontal
+  opaque-run discovery.
+- `Display::draw_masked_sprite(...)` for one ST7789 address window per opaque
+  horizontal cluster.
+- Opt-in `display-async` support and `Display::draw_sprite_async(...)` for
+  async SPI devices, including ESP-HAL `SpiDmaBus<Async>` GDMA transports.
+- `sprite::DoubleBufferedCanvas<W, H>` for disjoint transfer and paint buffers.
+- `sprite::DirtyRectTracker<N>` with movement registration, eight-pixel
+  proximity merging, localized clear/redraw updates, and fixed storage.
+
+### Changed
+
+- `Display::draw_iter` now gathers sequential mixed-color row pixels in a
+  64-pixel stack FIFO and burst-transmits them instead of opening one address
+  window per color run.
+- README display documentation now distinguishes the shared synchronous board
+  facade from the opt-in application-owned async GDMA transport.
+- The public crate version is now `0.2.4`.
+
+### Compatibility
+
+- Existing `Display`, `Sprite`, and `DirtyRegions` APIs remain source-compatible.
+- All new storage is fixed-size or caller-owned; no runtime heap allocation was
+  added.
+- `display-async` is disabled by default and does not pull async traits into
+  existing synchronous builds.
+
 ## [0.2.3] - 2026-07-04
 
 ### Added

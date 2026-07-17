@@ -23,8 +23,13 @@ use embedded_hal::{
     spi::{Error as SpiError, ErrorKind as SpiErrorKind, Operation, SpiBus, SpiDevice},
 };
 
+use crate::sprite::MaskedSprite;
+#[cfg(feature = "display-async")]
+use crate::sprite::SpriteBuffer;
+
 const COLOR_STREAM_PIXELS: usize = 128;
 const PIXEL_STREAM_PIXELS: usize = 128;
+const DRAW_ITER_PIXELS: usize = 64;
 // ST7789 command set, "Command Table 1" in Sitronix ST7789V-family datasheets.
 const CMD_SOFTWARE_RESET: u8 = 0x01;
 const CMD_SLEEP_OUT: u8 = 0x11;
@@ -135,6 +140,44 @@ impl PixelRun {
     }
 }
 
+struct PixelRowBuffer {
+    start: Point,
+    colors: [Rgb565; DRAW_ITER_PIXELS],
+    len: usize,
+}
+
+impl PixelRowBuffer {
+    fn new(point: Point, color: Rgb565) -> Self {
+        let mut colors = [Rgb565::BLACK; DRAW_ITER_PIXELS];
+        colors[0] = color;
+        Self {
+            start: point,
+            colors,
+            len: 1,
+        }
+    }
+
+    fn try_push(&mut self, point: Point, color: Rgb565) -> bool {
+        if self.len == DRAW_ITER_PIXELS
+            || point.y != self.start.y
+            || point.x != self.start.x.saturating_add(self.len as i32)
+        {
+            return false;
+        }
+        self.colors[self.len] = color;
+        self.len += 1;
+        true
+    }
+
+    fn area(&self) -> Rectangle {
+        Rectangle::new(self.start, Size::new(self.len as u32, 1))
+    }
+
+    fn colors(&self) -> &[Rgb565] {
+        &self.colors[..self.len]
+    }
+}
+
 #[doc(hidden)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug)]
@@ -219,6 +262,56 @@ where
     }
 }
 
+#[cfg(feature = "display-async")]
+impl<Bus, Cs, Delay> embedded_hal_async::spi::SpiDevice for LcdSpiDevice<Bus, Cs, Delay>
+where
+    Bus: SpiBus<u8> + embedded_hal_async::spi::SpiBus<u8>,
+    Cs: OutputPin,
+    Delay: DelayNs,
+    Bus::Error: SpiError,
+    Cs::Error: DigitalError,
+{
+    async fn transaction(
+        &mut self,
+        operations: &mut [embedded_hal_async::spi::Operation<'_, u8>],
+    ) -> Result<(), Self::Error> {
+        self.cs.set_low().map_err(LcdSpiDeviceError::ChipSelect)?;
+        let transaction_result = async {
+            for operation in operations {
+                match operation {
+                    Operation::Read(buffer) => {
+                        embedded_hal_async::spi::SpiBus::read(&mut self.bus, buffer)
+                            .await
+                            .map_err(LcdSpiDeviceError::Bus)?
+                    }
+                    Operation::Write(buffer) => {
+                        embedded_hal_async::spi::SpiBus::write(&mut self.bus, buffer)
+                            .await
+                            .map_err(LcdSpiDeviceError::Bus)?
+                    }
+                    Operation::Transfer(read, write) => {
+                        embedded_hal_async::spi::SpiBus::transfer(&mut self.bus, read, write)
+                            .await
+                            .map_err(LcdSpiDeviceError::Bus)?;
+                    }
+                    Operation::TransferInPlace(buffer) => {
+                        embedded_hal_async::spi::SpiBus::transfer_in_place(&mut self.bus, buffer)
+                            .await
+                            .map_err(LcdSpiDeviceError::Bus)?;
+                    }
+                    Operation::DelayNs(delay) => self.delay.delay_ns(*delay),
+                }
+            }
+            embedded_hal_async::spi::SpiBus::flush(&mut self.bus)
+                .await
+                .map_err(LcdSpiDeviceError::Bus)
+        }
+        .await;
+        let cs_result = self.cs.set_high().map_err(LcdSpiDeviceError::ChipSelect);
+        transaction_result.and(cs_result)
+    }
+}
+
 impl<SPI, DC, RST, BL> Display<SPI, DC, RST, BL> {
     /// Creates a display driver from concrete bus and control pins.
     #[must_use]
@@ -289,6 +382,45 @@ impl<SPI, DC, RST, BL> Display<SPI, DC, RST, BL> {
     /// Releases the display bus and control pins.
     pub fn release(self) -> (SPI, DC, RST, BL) {
         (self.spi, self.dc, self.reset, self.backlight)
+    }
+
+    fn logical_size(&self) -> Size {
+        let geometry = self.panel.geometry;
+        match self.orientation {
+            DisplayOrientation::Portrait | DisplayOrientation::PortraitInverted => {
+                Size::new(u32::from(geometry.width), u32::from(geometry.height))
+            }
+            DisplayOrientation::LandscapeClockwise
+            | DisplayOrientation::LandscapeCounterClockwise => {
+                Size::new(u32::from(geometry.height), u32::from(geometry.width))
+            }
+        }
+    }
+
+    fn map_rectangle_to_native(&self, area: &Rectangle) -> Rectangle {
+        let geometry = self.panel.geometry;
+        let native_width = i32::from(geometry.width);
+        let native_height = i32::from(geometry.height);
+        let x = area.top_left.x;
+        let y = area.top_left.y;
+        let width = area.size.width as i32;
+        let height = area.size.height as i32;
+
+        match self.orientation {
+            DisplayOrientation::Portrait => *area,
+            DisplayOrientation::PortraitInverted => Rectangle::new(
+                Point::new(native_width - x - width, native_height - y - height),
+                area.size,
+            ),
+            DisplayOrientation::LandscapeClockwise => Rectangle::new(
+                Point::new(y, native_height - x - width),
+                Size::new(area.size.height, area.size.width),
+            ),
+            DisplayOrientation::LandscapeCounterClockwise => Rectangle::new(
+                Point::new(native_width - y - height, x),
+                Size::new(area.size.height, area.size.width),
+            ),
+        }
     }
 }
 
@@ -405,6 +537,33 @@ where
         }
     }
 
+    /// Draws only opaque runs from a packed-mask sprite.
+    ///
+    /// Each horizontal run opens one ST7789 address window and streams its
+    /// contiguous color slice in a single logical burst. Transparent pixels do
+    /// not generate SPI traffic.
+    pub fn draw_masked_sprite<const W: usize, const H: usize>(
+        &mut self,
+        position: Point,
+        sprite: &MaskedSprite<W, H>,
+    ) -> Result<(), DisplayError<SpiError, PinError>> {
+        for y in 0..H {
+            let Some(colors) = sprite.color_row(y) else {
+                continue;
+            };
+            let mut x = 0;
+            while let Some(run) = sprite.next_opaque_run(y, x) {
+                let area = Rectangle::new(
+                    position + Point::new(run.start as i32, y as i32),
+                    Size::new((run.end - run.start) as u32, 1),
+                );
+                self.blit_pixels(&area, colors[run.clone()].iter().copied())?;
+                x = run.end;
+            }
+        }
+        Ok(())
+    }
+
     /// Draws a single centered text line using the built-in mono font.
     pub fn print_centered(
         &mut self,
@@ -438,43 +597,11 @@ where
         self.fill_solid(&run.rectangle(), run.color)
     }
 
-    fn logical_size(&self) -> Size {
-        let geometry = self.panel.geometry;
-        match self.orientation {
-            DisplayOrientation::Portrait | DisplayOrientation::PortraitInverted => {
-                Size::new(u32::from(geometry.width), u32::from(geometry.height))
-            }
-            DisplayOrientation::LandscapeClockwise
-            | DisplayOrientation::LandscapeCounterClockwise => {
-                Size::new(u32::from(geometry.height), u32::from(geometry.width))
-            }
-        }
-    }
-
-    fn map_rectangle_to_native(&self, area: &Rectangle) -> Rectangle {
-        let geometry = self.panel.geometry;
-        let native_width = i32::from(geometry.width);
-        let native_height = i32::from(geometry.height);
-        let x = area.top_left.x;
-        let y = area.top_left.y;
-        let width = area.size.width as i32;
-        let height = area.size.height as i32;
-
-        match self.orientation {
-            DisplayOrientation::Portrait => *area,
-            DisplayOrientation::PortraitInverted => Rectangle::new(
-                Point::new(native_width - x - width, native_height - y - height),
-                area.size,
-            ),
-            DisplayOrientation::LandscapeClockwise => Rectangle::new(
-                Point::new(y, native_height - x - width),
-                Size::new(area.size.height, area.size.width),
-            ),
-            DisplayOrientation::LandscapeCounterClockwise => Rectangle::new(
-                Point::new(native_width - y - height, x),
-                Size::new(area.size.height, area.size.width),
-            ),
-        }
+    fn flush_pixel_row(
+        &mut self,
+        row: &PixelRowBuffer,
+    ) -> Result<(), DisplayError<SpiError, PinError>> {
+        self.blit_pixels(&row.area(), row.colors().iter().copied())
     }
 
     fn set_address_window(
@@ -574,30 +701,30 @@ where
     where
         I: IntoIterator<Item = Pixel<Self::Color>>,
     {
-        let mut run = None;
+        let mut row = None;
 
         for Pixel(point, color) in pixels {
             if !self.bounding_box().contains(point) {
-                if let Some(current) = run.take() {
-                    self.flush_run(current)?;
+                if let Some(current) = row.take() {
+                    self.flush_pixel_row(&current)?;
                 }
                 continue;
             }
 
-            if let Some(mut current) = run.take() {
-                if current.try_extend(point, color) {
-                    run = Some(current);
+            if let Some(mut current) = row.take() {
+                if current.try_push(point, color) {
+                    row = Some(current);
                 } else {
-                    self.flush_run(current)?;
-                    run = Some(PixelRun::new(point, color));
+                    self.flush_pixel_row(&current)?;
+                    row = Some(PixelRowBuffer::new(point, color));
                 }
             } else {
-                run = Some(PixelRun::new(point, color));
+                row = Some(PixelRowBuffer::new(point, color));
             }
         }
 
-        if let Some(current) = run {
-            self.flush_run(current)?;
+        if let Some(current) = row {
+            self.flush_pixel_row(&current)?;
         }
         Ok(())
     }
@@ -665,6 +792,149 @@ where
 
         if let Some(current) = run {
             self.flush_run(current)?;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(feature = "display-async")]
+impl<SPI, DC, RST, BL, SpiError, PinError> Display<SPI, DC, RST, BL>
+where
+    SPI: embedded_hal_async::spi::SpiDevice<Error = SpiError>,
+    DC: OutputPin<Error = PinError>,
+    RST: OutputPin<Error = PinError>,
+    BL: OutputPin<Error = PinError>,
+{
+    /// Asynchronously transfers an owned sprite buffer to the display.
+    ///
+    /// For ESP32-C6 GDMA, construct this display over an async
+    /// `esp_hal::spi::master::SpiDmaBus`; ESP-HAL owns the channel descriptors,
+    /// wakes this future on completion, and reclaims each descriptor before the
+    /// awaited write returns. The base crate remains usable with synchronous
+    /// SPI when the `display-async` feature is disabled.
+    pub async fn draw_sprite_async<const W: usize, const H: usize>(
+        &mut self,
+        position: Point,
+        sprite: &SpriteBuffer<W, H>,
+    ) -> Result<(), DisplayError<SpiError, PinError>> {
+        let sprite_area = Rectangle::new(position, Size::new(W as u32, H as u32));
+        let clipped = sprite_area.intersection(&self.bounding_box());
+        if clipped.is_zero_sized() {
+            return Ok(());
+        }
+
+        let source_x = (clipped.top_left.x - position.x) as usize;
+        let source_y = (clipped.top_left.y - position.y) as usize;
+        let width = clipped.size.width as usize;
+        let height = clipped.size.height as usize;
+
+        match self.orientation {
+            DisplayOrientation::Portrait => {
+                self.set_address_window_async(&clipped).await?;
+                for y in source_y..source_y + height {
+                    self.write_sprite_row_async(sprite, y, source_x, width, false)
+                        .await?;
+                }
+            }
+            DisplayOrientation::PortraitInverted => {
+                let native = self.map_rectangle_to_native(&clipped);
+                self.set_address_window_async(&native).await?;
+                for y in (source_y..source_y + height).rev() {
+                    self.write_sprite_row_async(sprite, y, source_x, width, true)
+                        .await?;
+                }
+            }
+            DisplayOrientation::LandscapeClockwise
+            | DisplayOrientation::LandscapeCounterClockwise => {
+                let reverse = self.orientation == DisplayOrientation::LandscapeClockwise;
+                for row in 0..height {
+                    let logical_row = Rectangle::new(
+                        Point::new(clipped.top_left.x, clipped.top_left.y + row as i32),
+                        Size::new(clipped.size.width, 1),
+                    );
+                    let native = self.map_rectangle_to_native(&logical_row);
+                    self.set_address_window_async(&native).await?;
+                    self.write_sprite_row_async(sprite, source_y + row, source_x, width, reverse)
+                        .await?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn command_async(
+        &mut self,
+        command: u8,
+        data: &[u8],
+    ) -> Result<(), DisplayError<SpiError, PinError>> {
+        self.dc.set_low().map_err(DisplayError::Pin)?;
+        embedded_hal_async::spi::SpiDevice::write(&mut self.spi, &[command])
+            .await
+            .map_err(DisplayError::Spi)?;
+        if !data.is_empty() {
+            self.dc.set_high().map_err(DisplayError::Pin)?;
+            embedded_hal_async::spi::SpiDevice::write(&mut self.spi, data)
+                .await
+                .map_err(DisplayError::Spi)?;
+        }
+        Ok(())
+    }
+
+    async fn set_address_window_async(
+        &mut self,
+        area: &Rectangle,
+    ) -> Result<(), DisplayError<SpiError, PinError>> {
+        let geometry = self.panel.geometry;
+        let x0 = geometry.offset_x + area.top_left.x.max(0) as u16;
+        let y0 = geometry.offset_y + area.top_left.y.max(0) as u16;
+        let x1 = x0 + area.size.width.saturating_sub(1) as u16;
+        let y1 = y0 + area.size.height.saturating_sub(1) as u16;
+        self.command_async(
+            CMD_COLUMN_ADDRESS_SET,
+            &[(x0 >> 8) as u8, x0 as u8, (x1 >> 8) as u8, x1 as u8],
+        )
+        .await?;
+        self.command_async(
+            CMD_ROW_ADDRESS_SET,
+            &[(y0 >> 8) as u8, y0 as u8, (y1 >> 8) as u8, y1 as u8],
+        )
+        .await?;
+        self.dc.set_low().map_err(DisplayError::Pin)?;
+        embedded_hal_async::spi::SpiDevice::write(&mut self.spi, &[CMD_MEMORY_WRITE])
+            .await
+            .map_err(DisplayError::Spi)?;
+        self.dc.set_high().map_err(DisplayError::Pin)
+    }
+
+    async fn write_sprite_row_async<const W: usize, const H: usize>(
+        &mut self,
+        sprite: &SpriteBuffer<W, H>,
+        y: usize,
+        start: usize,
+        len: usize,
+        reverse: bool,
+    ) -> Result<(), DisplayError<SpiError, PinError>> {
+        let Some(row) = sprite.row(y) else {
+            return Ok(());
+        };
+        let mut bytes = [0u8; PIXEL_STREAM_PIXELS * 2];
+        let mut written = 0;
+        while written < len {
+            let pixels = (len - written).min(PIXEL_STREAM_PIXELS);
+            for index in 0..pixels {
+                let x = if reverse {
+                    start + len - written - index - 1
+                } else {
+                    start + written + index
+                };
+                let raw = row[x].into_storage().to_be_bytes();
+                bytes[index * 2] = raw[0];
+                bytes[index * 2 + 1] = raw[1];
+            }
+            embedded_hal_async::spi::SpiDevice::write(&mut self.spi, &bytes[..pixels * 2])
+                .await
+                .map_err(DisplayError::Spi)?;
+            written += pixels;
         }
         Ok(())
     }
